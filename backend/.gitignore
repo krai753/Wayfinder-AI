@@ -1,0 +1,8 @@
+# Wayfinder AI Backend
+venv/
+__pycache__/
+*.pyc
+.env
+data/
+airports_raw.dat
+.DS_Store
