@@ -12,6 +12,12 @@ npm run dev
 
 Then open http://localhost:5173 in your browser.
 
+## Available Scripts
+
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run preview` - Preview production build
+
 ## Features
 
 ✅ Voice-first interface  
@@ -28,6 +34,27 @@ Then open http://localhost:5173 in your browser.
 - Tailwind CSS
 - Motion (animations)
 - Lucide React (icons)
+
+## Project Structure
+
+```
+frontend/
+├── src/
+│   ├── app/
+│   │   └── App.tsx
+│   ├── components/
+│   │   └── ui/
+│   ├── styles/
+│   │   ├── index.css
+│   │   ├── fonts.css
+│   │   ├── theme.css
+│   │   └── tailwind.css
+│   └── main.tsx
+├── index.html
+├── package.json
+├── vite.config.ts
+└── tsconfig.json
+```
 
 ## Build for Production
 
