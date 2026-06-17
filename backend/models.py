@@ -114,3 +114,59 @@ class DuffelOffer(BaseModel):
     currency: str
     cabin_class: str
     stops: int = 0
+
+
+# ── Reschedule / Cancel / Portfolio ──────────────────────────────
+
+
+class RescheduleRequest(BaseModel):
+    """Request to reschedule a booking."""
+    session_id: Optional[str] = None
+    booking_id: Optional[str] = None
+    new_departure_date: str = Field(..., description="New departure date (YYYY-MM-DD)")
+
+
+class CancelRequest(BaseModel):
+    """Request to cancel a booking."""
+    booking_id: Optional[str] = None
+    order_id: Optional[str] = None
+
+
+class ConfirmCancelRequest(BaseModel):
+    """Confirm a cancellation after seeing the refund."""
+    cancellation_id: str = Field(..., description="The Duffel order cancellation ID to confirm")
+
+
+class RescheduleOffer(BaseModel):
+    """A change offer for rescheduling a flight."""
+    offer_id: str
+    airline: str
+    flight_number: str
+    departure_time: str
+    arrival_time: str
+    price: str
+    currency: str
+    penalty_amount: str
+    change_total: str
+
+
+class PortfolioResponse(BaseModel):
+    """User portfolio / trip history overview."""
+    total_trips: int
+    total_spent: str
+    favorite_route: str
+    upcoming_trips: list
+    cancelled_count: int
+
+
+class VoiceCommandRequest(BaseModel):
+    """Natural language voice command input."""
+    text: str = Field(..., description="The natural language command (e.g. 'book a flight to London')")
+    session_id: Optional[str] = None
+
+
+class VoiceCommandResponse(BaseModel):
+    """Structured response from voice command processing."""
+    intent: str = Field(..., description="Detected intent: search|book|cancel|reschedule|history|portfolio|budget")
+    parameters: dict = Field(default_factory=dict, description="Extracted parameters from the command")
+    response_text: str = Field(..., description="Natural language response to speak back to the user")

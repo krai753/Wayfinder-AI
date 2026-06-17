@@ -1,0 +1,720 @@
+"""
+Wayfinder Backend — Voice Command Router
+Unified voice interface: "Book New York to London next Tuesday"
+"""
+import json
+import logging
+import uuid
+from datetime import datetime, date
+from pathlib import Path
+from fastapi import APIRouter, HTTPException, File, UploadFile, Query
+from fastapi.responses import FileResponse
+from models import VoiceCommandRequest, VoiceCommandResponse
+from llm_orchestrator import llm
+from voice_engine import voice
+from duffel_client import duffel
+from airport_data import search_airports, get_airport
+from database import create_session, get_bookings, get_bookings_by_user, get_portfolio_stats, get_session as get_db_session, save_booking, save_offer
+from wizard_manager import create_wizard_session, get_wizard_session, process_step
+
+router = APIRouter(prefix="/api/voice", tags=["voice"])
+logger = logging.getLogger("wayfinder.voice_router")
+
+
+# ── Helper: Resolve date phrases ──────────────────────────────────
+
+
+def _resolve_date(phrase: str) -> str:
+    """Convert natural language date phrases to YYYY-MM-DD."""
+    today = date.today()
+    lowered = phrase.strip().lower()
+
+    if lowered == "today":
+        return today.isoformat()
+    if lowered == "tomorrow":
+        from datetime import timedelta
+        return (today + timedelta(days=1)).isoformat()
+    if lowered == "day after tomorrow":
+        from datetime import timedelta
+        return (today + timedelta(days=2)).isoformat()
+
+    # "next tuesday", "next monday" etc.
+    day_map = {
+        "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+        "friday": 4, "saturday": 5, "sunday": 6,
+    }
+    for day_name, day_idx in day_map.items():
+        if f"next {day_name}" in lowered or f"this {day_name}" in lowered:
+            days_ahead = day_idx - today.weekday()
+            if days_ahead <= 0:
+                days_ahead += 7
+            from datetime import timedelta
+            return (today + timedelta(days=days_ahead)).isoformat()
+
+    # Already a date-like string?
+    try:
+        from datetime import datetime as dt
+        dt.strptime(phrase, "%Y-%m-%d")
+        return phrase
+    except ValueError:
+        pass
+
+    # Try "July 15th" style
+    import re
+    months = {
+        "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6,
+        "july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12,
+        "jan": 1, "feb": 2, "mar": 3, "apr": 4, "jun": 6, "jul": 7,
+        "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+    }
+    for month_name, month_num in months.items():
+        pattern = rf"{month_name}\s+(\d{{1,2}})(?:st|nd|rd|th)?"
+        m = re.search(pattern, lowered)
+        if m:
+            day = int(m.group(1))
+            year = today.year
+            # If the date has already passed this year, use next year
+            test_date = date(year, month_num, day)
+            if test_date < today:
+                test_date = date(year + 1, month_num, day)
+            return test_date.isoformat()
+
+    return phrase  # Return as-is, LLM may have provided ISO format
+
+
+# ── Helper: Resolve IATA from city names ──────────────────────────
+
+
+def _resolve_iata(city_or_code: str) -> str:
+    """Resolve a city name or partial code to an IATA code."""
+    code = city_or_code.strip().upper()
+    # If it's already a 3-letter IATA code, validate it
+    if len(code) == 3 and get_airport(code):
+        return code
+
+    # Fuzzy search airports
+    results = search_airports(city_or_code, limit=5)
+    if results:
+        # Prefer major airports (ranked by search_airports scoring)
+        return results[0]["iata"]
+
+    return code  # Return original if nothing found
+
+
+# ── MAIN VOICE COMMAND ────────────────────────────────────────────
+
+
+@router.post("/command", response_model=VoiceCommandResponse)
+async def voice_command(req: VoiceCommandRequest):
+    """
+    Process a voice/natural language command.
+    Accepts text like "Book a flight from New York to London next Tuesday under $400"
+    Returns structured response with intent, parameters, and spoken response text.
+
+    The LLM parses the intent, then this router executes the appropriate action
+    and returns results formatted for TTS playback.
+    """
+    # 1. Get session context if session_id provided
+    context = None
+    if req.session_id:
+        session = get_wizard_session(req.session_id)
+        if session:
+            context = {
+                "session_id": req.session_id,
+                "current_step": session.get("current_step"),
+                "origin": session.get("origin"),
+                "destination": session.get("destination"),
+                "departure_date": session.get("departure_date"),
+            }
+
+    # 2. LLM parses the command
+    try:
+        result = await llm.parse_command(req.text, context)
+    except Exception as e:
+        logger.error(f"LLM parse failed: {e}")
+        return VoiceCommandResponse(
+            intent="help",
+            parameters={"error": str(e)},
+            response_text="Sorry, I had trouble understanding that. Could you please rephrase?",
+        )
+
+    intent = result.get("intent", "help")
+    params = result.get("parameters", {})
+    response_text = result.get("response_text", "")
+
+    logger.info(f"Parsed command: intent={intent}, params={params}")
+
+    # 3. Execute the appropriate action
+    try:
+        if intent == "search_flights":
+            return await _handle_search_flights(params, response_text, req.session_id)
+
+        elif intent == "book_flight":
+            return await _handle_book_flight(params, response_text, req.session_id)
+
+        elif intent == "cancel_booking":
+            return await _handle_cancel_booking(params, response_text)
+
+        elif intent == "reschedule_booking":
+            return await _handle_reschedule_booking(params, response_text)
+
+        elif intent == "view_history":
+            return await _handle_view_history(params, response_text)
+
+        elif intent == "view_portfolio":
+            return await _handle_view_portfolio(params, response_text)
+
+        elif intent == "search_with_budget":
+            return await _handle_search_with_budget(params, response_text, req.session_id)
+
+        elif intent == "help":
+            return VoiceCommandResponse(
+                intent="help",
+                parameters=params,
+                response_text=response_text or (
+                    "I can help you search for flights, book a trip, "
+                    "cancel or reschedule an existing booking, or check your flight history. "
+                    "Just tell me what you need!"
+                ),
+            )
+
+        else:
+            return VoiceCommandResponse(
+                intent="help",
+                parameters={"unknown_intent": intent},
+                response_text="I'm not sure how to help with that. Try saying 'book a flight' or 'show my trips'.",
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Command execution failed: {e}")
+        return VoiceCommandResponse(
+            intent=intent,
+            parameters=params,
+            response_text=f"Sorry, something went wrong: {str(e)}",
+        )
+
+
+# ── Intent Handlers ───────────────────────────────────────────────
+
+
+async def _handle_search_flights(params: dict, response_text: str, session_id: str | None) -> VoiceCommandResponse:
+    """Search for flights and return results."""
+    origin = _resolve_iata(params.get("origin", ""))
+    destination = _resolve_iata(params.get("destination", ""))
+    dep_date = _resolve_date(params.get("date", ""))
+    passengers = params.get("passengers", 1)
+
+    if not origin or not destination or not dep_date:
+        return VoiceCommandResponse(
+            intent="search_flights",
+            parameters=params,
+            response_text="I need an origin, destination, and date to search for flights.",
+        )
+
+    # Ensure we have valid airports
+    if not get_airport(origin):
+        return VoiceCommandResponse(
+            intent="search_flights",
+            parameters=params,
+            response_text=f"Sorry, I couldn't find the airport for '{origin}'. Could you try a different city?",
+        )
+    if not get_airport(destination):
+        return VoiceCommandResponse(
+            intent="search_flights",
+            parameters=params,
+            response_text=f"Sorry, I couldn't find the airport for '{destination}'. Could you try a different city?",
+        )
+
+    raw = await duffel.search_flights(
+        origin=origin,
+        destination=destination,
+        departure_date=dep_date,
+        passengers=passengers,
+    )
+    offers = duffel.simplify_offers(raw)
+
+    # Create or use session for caching
+    sid = session_id
+    if not sid:
+        session_data = create_wizard_session()
+        sid = session_data["id"]
+
+    # Cache offers
+    for offer in offers:
+        save_offer(sid, offer["id"], offer)
+
+    # Build response
+    if not offers:
+        speech = f"No flights found from {origin} to {destination} on {dep_date}."
+    else:
+        cheapest = min(offers, key=lambda o: float(o.get("price", 0) or 0))
+        speech = (
+            f"I found {len(offers)} flights from {origin} to {destination} on {dep_date}. "
+            f"The cheapest is {cheapest['airline']} flight {cheapest['flight_number']} "
+            f"at {cheapest['price']} {cheapest['currency']}."
+        )
+
+    return VoiceCommandResponse(
+        intent="search_flights",
+        parameters={
+            "origin": origin,
+            "destination": destination,
+            "date": dep_date,
+            "passengers": passengers,
+            "offer_count": len(offers),
+            "offers": offers[:5],  # Top 5 for frontend display
+            "session_id": sid,
+            "cheapest_offer": cheapest if offers else None,
+        },
+        response_text=response_text or speech,
+    )
+
+
+async def _handle_book_flight(params: dict, response_text: str, session_id: str | None) -> VoiceCommandResponse:
+    """Book a flight using an existing wizard session or create one."""
+    sid = params.get("session_id") or session_id
+    offer_id = params.get("offer_id", "")
+
+    if not sid:
+        # Need to start a booking flow
+        return VoiceCommandResponse(
+            intent="book_flight",
+            parameters=params,
+            response_text="Let me start a new booking. First, where would you like to fly from?",
+        )
+
+    if not offer_id:
+        return VoiceCommandResponse(
+            intent="book_flight",
+            parameters=params,
+            response_text="I need to know which flight you'd like to book. Try saying 'select the first flight'.",
+        )
+
+    # Get the session and stored offers
+    session = get_wizard_session(sid)
+    if not session:
+        return VoiceCommandResponse(
+            intent="book_flight",
+            parameters=params,
+            response_text="I couldn't find your booking session. Let's start fresh.",
+        )
+
+    # Auto-complete wizard steps for direct booking
+    origin = params.get("origin") or session.get("origin", "")
+    destination = params.get("destination") or session.get("destination", "")
+    dep_date = params.get("date") or session.get("departure_date", "")
+    passenger_name = params.get("passenger_name") or session.get("passenger_name", "")
+
+    if origin:
+        process_step(sid, "origin", {"origin": origin})
+    if destination:
+        process_step(sid, "destination", {"destination": destination})
+    if dep_date:
+        process_step(sid, "departure_date", {"departure_date": dep_date})
+
+    if offer_id:
+        # Build flight summary from cached offers
+        from database import get_offers
+        cached = get_offers(sid)
+        summary = ""
+        for co in cached:
+            od = co.get("offer_data", {})
+            if isinstance(od, dict) and od.get("id") == offer_id:
+                summary = (
+                    f"{od.get('airline', '')} {od.get('flight_number', '')} — "
+                    f"{od.get('origin', '')} → {od.get('destination', '')}, "
+                    f"{od.get('price', '')} {od.get('currency', '')}"
+                )
+                break
+
+        process_step(sid, "flight_selection", {"offer_id": offer_id, "flight_summary": summary})
+
+    # Check if we have all we need to book
+    updated_session = get_wizard_session(sid)
+    need_passenger = not updated_session.get("passenger_name")
+    need_confirmation = updated_session.get("current_step") not in ("confirmation", "completed")
+
+    if need_passenger:
+        return VoiceCommandResponse(
+            intent="book_flight",
+            parameters={"session_id": sid, "offer_id": offer_id, "missing": "passenger_name"},
+            response_text="What is the passenger's name?",
+        )
+
+    if need_confirmation:
+        return VoiceCommandResponse(
+            intent="book_flight",
+            parameters={"session_id": sid, "offer_id": offer_id},
+            response_text=f"Ready to book! {updated_session.get('selected_flight_summary', '')}. Shall I confirm?",
+        )
+
+    # Everything is ready — create the booking
+    process_step(sid, "confirmation", {"confirmed": True})
+
+    from routers.booking import create_booking
+    from models import BookingCreateRequest
+
+    booking_result = await create_booking(BookingCreateRequest(session_id=sid))
+
+    speech = (
+        f"Booking confirmed! Your flight from {booking_result.origin} to {booking_result.destination} "
+        f"on {booking_result.departure_date} is booked. "
+        f"Reference: {booking_result.booking_reference}. "
+        f"Total: {booking_result.total_amount}."
+    )
+
+    return VoiceCommandResponse(
+        intent="book_flight",
+        parameters={
+            "session_id": sid,
+            "booking_id": booking_result.id,
+            "booking_reference": booking_result.booking_reference,
+            "origin": booking_result.origin,
+            "destination": booking_result.destination,
+            "departure_date": booking_result.departure_date,
+            "total_amount": booking_result.total_amount,
+            "passenger_name": booking_result.passenger_name,
+        },
+        response_text=response_text or speech,
+    )
+
+
+async def _handle_cancel_booking(params: dict, response_text: str) -> VoiceCommandResponse:
+    """Cancel a booking."""
+    booking_id = params.get("booking_id", "")
+
+    if not booking_id:
+        # Try to find the most recent booking for the user
+        user_id = params.get("user_id")
+        if user_id:
+            bookings = get_bookings_by_user(user_id)
+            if bookings:
+                booking_id = bookings[0]["id"]
+
+    if not booking_id:
+        return VoiceCommandResponse(
+            intent="cancel_booking",
+            parameters=params,
+            response_text="I need a booking reference to cancel. You can find it in your flight history.",
+        )
+
+    # Initiate cancellation (step 1)
+    try:
+        from routers.manage import cancel_booking as cancel_action
+        cancel_data = await cancel_action(booking_id)
+
+        speech = (
+            f"I've initiated a cancellation for booking {booking_id}. "
+            f"A refund of {cancel_data['refund_amount']} {cancel_data['refund_currency']} is available. "
+            f"Shall I confirm the cancellation?"
+        )
+
+        return VoiceCommandResponse(
+            intent="cancel_booking",
+            parameters={
+                "booking_id": booking_id,
+                "cancellation_id": cancel_data["cancellation_id"],
+                "refund_amount": cancel_data["refund_amount"],
+                "refund_currency": cancel_data["refund_currency"],
+                "status": cancel_data["status"],
+            },
+            response_text=response_text or speech,
+        )
+
+    except HTTPException as e:
+        return VoiceCommandResponse(
+            intent="cancel_booking",
+            parameters={"booking_id": booking_id},
+            response_text=f"Could not cancel booking: {e.detail}",
+        )
+
+
+async def _handle_reschedule_booking(params: dict, response_text: str) -> VoiceCommandResponse:
+    """Reschedule a booking to a new date."""
+    booking_id = params.get("booking_id", "")
+    new_date = _resolve_date(params.get("new_date", ""))
+
+    if not booking_id:
+        user_id = params.get("user_id")
+        if user_id:
+            bookings = get_bookings_by_user(user_id)
+            if bookings:
+                booking_id = bookings[0]["id"]
+
+    if not booking_id:
+        return VoiceCommandResponse(
+            intent="reschedule_booking",
+            parameters=params,
+            response_text="I need a booking reference to reschedule.",
+        )
+
+    if not new_date:
+        return VoiceCommandResponse(
+            intent="reschedule_booking",
+            parameters={"booking_id": booking_id},
+            response_text="What date would you like to move your flight to?",
+        )
+
+    # Search for reschedule options
+    from routers.manage import reschedule_search as rs_search
+
+    try:
+        search_result = await rs_search(booking_id, new_date)
+        offers = search_result.get("change_offers", [])
+
+        if not offers:
+            speech = f"No reschedule options available for booking {booking_id} on {new_date}."
+        else:
+            cheapest = min(offers, key=lambda o: float(o.get("change_total", 0) or 0))
+            speech = (
+                f"I found {len(offers)} reschedule options for {new_date}. "
+                f"The cheapest option is {cheapest['airline']} at "
+                f"{cheapest['change_total']} {cheapest['currency']} total change fee."
+            )
+
+        return VoiceCommandResponse(
+            intent="reschedule_booking",
+            parameters={
+                "booking_id": booking_id,
+                "new_date": new_date,
+                "change_offers": offers,
+                "offer_count": len(offers),
+            },
+            response_text=response_text or speech,
+        )
+
+    except HTTPException as e:
+        return VoiceCommandResponse(
+            intent="reschedule_booking",
+            parameters={"booking_id": booking_id, "new_date": new_date},
+            response_text=f"Reschedule search failed: {e.detail}",
+        )
+
+
+async def _handle_view_history(params: dict, response_text: str) -> VoiceCommandResponse:
+    """View flight history for a user."""
+    user_id = params.get("user_id", "")
+
+    if not user_id:
+        return VoiceCommandResponse(
+            intent="view_history",
+            parameters=params,
+            response_text="I need to know which user's history to look up.",
+        )
+
+    bookings = get_bookings_by_user(user_id)
+
+    if not bookings:
+        speech = "You don't have any flights yet. Say 'book a flight' to get started!"
+    else:
+        total = len(bookings)
+        upcoming = sum(1 for b in bookings if b.get("status") == "confirmed" and b.get("departure_date", "") >= date.today().isoformat())
+        speech = (
+            f"You have {total} trips in your history. "
+            f"{upcoming} of them are upcoming. "
+            f"Your most recent trip was from {bookings[0].get('origin', '')} to {bookings[0].get('destination', '')}."
+        )
+
+    return VoiceCommandResponse(
+        intent="view_history",
+        parameters={
+            "user_id": user_id,
+            "total_trips": len(bookings),
+            "bookings": bookings[:10],  # Last 10
+        },
+        response_text=response_text or speech,
+    )
+
+
+async def _handle_view_portfolio(params: dict, response_text: str) -> VoiceCommandResponse:
+    """View flight portfolio statistics."""
+    user_id = params.get("user_id", "")
+
+    if not user_id:
+        return VoiceCommandResponse(
+            intent="view_portfolio",
+            parameters=params,
+            response_text="I need to know which user's portfolio to look up.",
+        )
+
+    stats = get_portfolio_stats(user_id)
+
+    speech = (
+        f"You've taken {stats['total_bookings']} trips, spending a total of "
+        f"£{stats['total_spent']}. "
+        f"Your favourite route is {stats['favorite_route']}. "
+        f"You have {len(stats['upcoming_trips'])} upcoming trips."
+    )
+
+    return VoiceCommandResponse(
+        intent="view_portfolio",
+        parameters={
+            "user_id": user_id,
+            "total_trips": stats["total_bookings"],
+            "total_spent": stats["total_spent"],
+            "favorite_route": stats["favorite_route"],
+            "upcoming_trips": stats["upcoming_trips"],
+            "cancelled_count": stats["cancelled_count"],
+        },
+        response_text=response_text or speech,
+    )
+
+
+async def _handle_search_with_budget(params: dict, response_text: str, session_id: str | None) -> VoiceCommandResponse:
+    """Search flights within a budget."""
+    origin = _resolve_iata(params.get("origin", ""))
+    destination = _resolve_iata(params.get("destination", ""))
+    dep_date = _resolve_date(params.get("date", ""))
+    max_price = params.get("max_price", 0)
+    passengers = params.get("passengers", 1)
+
+    if not origin or not destination or not dep_date or not max_price:
+        return VoiceCommandResponse(
+            intent="search_with_budget",
+            parameters=params,
+            response_text="I need an origin, destination, date, and maximum price to search within a budget.",
+        )
+
+    # Validate
+    if not get_airport(origin):
+        return VoiceCommandResponse(
+            intent="search_with_budget",
+            parameters=params,
+            response_text=f"Sorry, I couldn't find the airport for '{origin}'.",
+        )
+    if not get_airport(destination):
+        return VoiceCommandResponse(
+            intent="search_with_budget",
+            parameters=params,
+            response_text=f"Sorry, I couldn't find the airport for '{destination}'.",
+        )
+
+    raw = await duffel.search_flights(
+        origin=origin,
+        destination=destination,
+        departure_date=dep_date,
+        passengers=passengers,
+    )
+    offers = duffel.simplify_offers(raw)
+
+    # Filter by budget
+    budget_offers = []
+    for offer in offers:
+        try:
+            price = float(offer["price"])
+            if price <= float(max_price):
+                budget_offers.append(offer)
+        except (ValueError, TypeError):
+            continue
+
+    # Cache offers
+    sid = session_id
+    if not sid:
+        session_data = create_wizard_session()
+        sid = session_data["id"]
+    for offer in budget_offers:
+        save_offer(sid, offer["id"], offer)
+
+    if not budget_offers:
+        speech = f"No flights found from {origin} to {destination} on {dep_date} within your budget of {max_price}."
+    else:
+        cheapest = min(budget_offers, key=lambda o: float(o.get("price", 0) or 0))
+        speech = (
+            f"I found {len(budget_offers)} flights under {max_price} from {origin} to {destination} "
+            f"on {dep_date}. The cheapest is {cheapest['airline']} at "
+            f"{cheapest['price']} {cheapest['currency']}."
+        )
+
+    return VoiceCommandResponse(
+        intent="search_with_budget",
+        parameters={
+            "origin": origin,
+            "destination": destination,
+            "date": dep_date,
+            "max_price": max_price,
+            "passengers": passengers,
+            "offer_count": len(budget_offers),
+            "offers": budget_offers[:5],
+            "session_id": sid,
+        },
+        response_text=response_text or speech,
+    )
+
+
+# ── TEXT-TO-SPEECH ────────────────────────────────────────────────
+
+
+@router.post("/speak")
+async def voice_speak(text: str = Query(..., description="Text to convert to speech")):
+    """
+    Convert text to speech audio file.
+    Returns an MP3 audio file of the spoken text.
+    """
+    if not text or not text.strip():
+        raise HTTPException(status_code=400, detail="Text is required")
+
+    try:
+        audio_path = await voice.text_to_speech(text)
+
+        if not audio_path:
+            raise HTTPException(status_code=503, detail="Text-to-speech engine unavailable")
+
+        return FileResponse(
+            path=audio_path,
+            media_type="audio/mpeg",
+            filename=f"wayfinder_speech_{uuid.uuid4().hex[:8]}.mp3",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)}")
+
+
+# ── SPEECH-TO-TEXT ────────────────────────────────────────────────
+
+
+@router.post("/listen")
+async def voice_listen(audio: UploadFile = File(...)):
+    """
+    Convert uploaded audio file to text.
+    Accepts WAV, MP3, FLAC, etc. Returns the transcribed text.
+    """
+    if not audio.filename:
+        raise HTTPException(status_code=400, detail="No audio file provided")
+
+    # Save uploaded file temporarily
+    audio_dir = Path("/tmp/wayfinder_audio")
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    temp_path = audio_dir / f"upload_{uuid.uuid4().hex[:12]}_{audio.filename}"
+
+    try:
+        content = await audio.read()
+        with open(temp_path, "wb") as f:
+            f.write(content)
+
+        # Process with speech-to-text engine
+        transcript = await voice.speech_to_text(str(temp_path))
+
+        if not transcript:
+            raise HTTPException(status_code=400, detail="Could not transcribe audio. Please try again or type your command.")
+
+        return {
+            "transcript": transcript,
+            "filename": audio.filename,
+            "length": len(content),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"STT failed: {str(e)}")
+    finally:
+        # Clean up temp file
+        try:
+            if temp_path.exists():
+                temp_path.unlink()
+        except Exception:
+            pass

@@ -141,6 +141,151 @@ class DuffelClient:
         resp.raise_for_status()
         return resp.json()
 
+    # ── Cancellations ──────────────────────────────────────────
+
+    async def cancel_order(self, order_id: str) -> dict:
+        """
+        Cancel a booking order via Duffel Order Cancellations API.
+        POST /air/order_cancellations to initiate, then POST .../confirm to confirm.
+        Returns the cancellation result with refund amount.
+        """
+        # Step 1: Create the order cancellation
+        body = {
+            "data": {
+                "order_id": order_id,
+            }
+        }
+        resp = await self.client.post("/air/order_cancellations", json=body)
+        resp.raise_for_status()
+        cancellation = resp.json()
+        cancellation_data = cancellation.get("data", {})
+        cancellation_id = cancellation_data.get("id", "")
+
+        if not cancellation_id:
+            raise RuntimeError("Failed to create order cancellation: no ID returned")
+
+        # Step 2: Confirm the cancellation
+        confirm_resp = await self.client.post(
+            f"/air/order_cancellations/{cancellation_id}/confirm"
+        )
+        confirm_resp.raise_for_status()
+        confirmed = confirm_resp.json()
+
+        # Extract refund info
+        confirmed_data = confirmed.get("data", {})
+        refund_amount = confirmed_data.get("refund_amount", "0.00")
+        refund_currency = confirmed_data.get("refund_currency", "GBP")
+        status = confirmed_data.get("status", "unknown")
+
+        return {
+            "cancellation_id": cancellation_id,
+            "status": status,
+            "refund_amount": refund_amount,
+            "refund_currency": refund_currency,
+            "order_id": order_id,
+            "raw_response": confirmed,
+        }
+
+    # ── Order Changes / Rescheduling ───────────────────────────
+
+    async def create_change_request(
+        self,
+        order_id: str,
+        slices_to_add: list[dict],
+        passengers: list[dict],
+    ) -> dict:
+        """
+        Create an order change request to reschedule a booking.
+        POST /air/order_change_requests with new slice data.
+
+        Args:
+            order_id: The Duffel order ID to change.
+            slices_to_add: List of new slice dicts, each with:
+                          {origin, destination, departure_date}
+            passengers: List of passenger dicts, each with {id, given_name, family_name, ...}
+
+        Returns change offers with price differences and penalties.
+        """
+        body = {
+            "data": {
+                "order_id": order_id,
+                "slices": {
+                    "add": slices_to_add,
+                },
+                "passengers": passengers,
+            }
+        }
+
+        resp = await self.client.post(
+            "/air/order_change_requests?supplier_timeout=10000",
+            json=body,
+        )
+        resp.raise_for_status()
+        result = resp.json()
+
+        # Extract change offers with pricing
+        change_offers = result.get("data", {}).get("change_offers", [])
+        simplified = []
+        for offer in change_offers:
+            total_penalty_amount = offer.get("total_penalty_amount", "0.00")
+            total_penalty_currency = offer.get("total_penalty_currency", "GBP")
+            new_total_amount = offer.get("new_total_amount", "0.00")
+            new_total_currency = offer.get("new_total_currency", "GBP")
+
+            slices = offer.get("slices", [])
+            for slice_ in slices:
+                segments = slice_.get("segments", [])
+                if not segments:
+                    continue
+                first_seg = segments[0]
+                last_seg = segments[-1]
+                airline = first_seg.get("operating_carrier", {}).get("name", "Unknown")
+                flight_number = (
+                    f"{first_seg.get('operating_carrier', {}).get('iata_code', '')}"
+                    f"{first_seg.get('flight_number', '')}"
+                )
+                simplified.append({
+                    "offer_id": offer["id"],
+                    "airline": airline,
+                    "flight_number": flight_number,
+                    "departure_time": first_seg.get("departing_at", ""),
+                    "arrival_time": last_seg.get("arriving_at", ""),
+                    "price": new_total_amount,
+                    "currency": new_total_currency,
+                    "penalty_amount": total_penalty_amount,
+                    "penalty_currency": total_penalty_currency,
+                    "change_total": str(float(total_penalty_amount) + float(new_total_amount)),
+                })
+
+        return {
+            "order_change_request_id": result.get("data", {}).get("id", ""),
+            "change_offers": simplified,
+            "raw_response": result,
+        }
+
+    async def confirm_change(self, order_change_offer_id: str) -> dict:
+        """
+        Confirm an order change by creating the actual order change.
+        Returns the confirmed order change details.
+        """
+        body = {
+            "data": {
+                "selected_order_change_offer": order_change_offer_id,
+            }
+        }
+
+        resp = await self.client.post("/air/order_changes", json=body)
+        resp.raise_for_status()
+        result = resp.json()
+
+        order_change_data = result.get("data", {})
+        return {
+            "order_change_id": order_change_data.get("id", ""),
+            "order_id": order_change_data.get("order_id", ""),
+            "status": order_change_data.get("status", ""),
+            "raw_response": result,
+        }
+
     # ── Helpers ─────────────────────────────────────────────────
 
     @staticmethod

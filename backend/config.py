@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./wayfinder.db"
     debug: bool = True
     cors_origins: str = "*"
+    deepseek_api_key: str = ""
+    deepseek_model: str = "deepseek-chat"
+    openai_api_key: str = ""
 
     @property
     def duffel_headers(self) -> dict:
@@ -26,6 +29,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        extra = "ignore"  # Allow extra env vars without error
 
 
 settings = Settings()

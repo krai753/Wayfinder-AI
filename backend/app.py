@@ -18,6 +18,8 @@ from airport_data import search_airports  # triggers load on first call
 from routers import search as search_router
 from routers import booking as booking_router
 from routers import wizard as wizard_router
+from routers import manage as manage_router
+from routers import voice as voice_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("wayfinder")
@@ -64,6 +66,8 @@ app.add_middleware(
 app.include_router(search_router.router)
 app.include_router(booking_router.router)
 app.include_router(wizard_router.router)
+app.include_router(manage_router.router)
+app.include_router(voice_router.router)
 
 
 @app.get("/")
@@ -87,6 +91,16 @@ async def root():
             "create_booking": "POST /api/booking/create",
             "get_booking": "GET /api/booking/{order_id}",
             "list_bookings": "GET /api/bookings",
+            "cancel_booking": "POST /api/booking/{booking_id}/cancel",
+            "confirm_cancellation": "POST /api/booking/{booking_id}/cancel/confirm",
+            "reschedule_search": "POST /api/booking/{booking_id}/reschedule/search?new_date=...",
+            "reschedule_confirm": "POST /api/booking/{booking_id}/reschedule/confirm?change_offer_id=...",
+            "flight_history": "GET /api/user/{user_id}/history",
+            "flight_portfolio": "GET /api/user/{user_id}/portfolio",
+            "budget_search": "GET /api/flights/budget?origin=...&destination=...&max_price=...",
+            "voice_command": "POST /api/voice/command",
+            "voice_speak": "POST /api/voice/speak?text=...",
+            "voice_listen": "POST /api/voice/listen (multipart audio upload)",
         },
     }
 

@@ -49,6 +49,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS bookings (
             id TEXT PRIMARY KEY,
             session_id TEXT NOT NULL,
+            user_id TEXT,
             duffel_order_id TEXT,
             status TEXT DEFAULT 'pending',
             origin TEXT NOT NULL,
@@ -74,6 +75,13 @@ def init_db():
         );
     """)
     conn.commit()
+
+    # Add user_id column to existing bookings table if it doesn't exist
+    try:
+        cursor.execute("ALTER TABLE bookings ADD COLUMN user_id TEXT")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
     conn.close()
 
 
@@ -117,13 +125,14 @@ def save_booking(booking: dict) -> dict:
     conn = get_db()
     conn.execute(
         """INSERT INTO bookings
-           (id, session_id, duffel_order_id, status, origin, destination,
+           (id, session_id, user_id, duffel_order_id, status, origin, destination,
             departure_date, flight_summary, passenger_name, passenger_assistance,
             total_amount, total_currency, booking_reference)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             booking["id"],
             booking["session_id"],
+            booking.get("user_id"),
             booking.get("duffel_order_id"),
             booking.get("status", "confirmed"),
             booking["origin"],
@@ -179,3 +188,115 @@ def get_offers(session_id: str) -> list[dict]:
         d["offer_data"] = json.loads(d["offer_data"])
         result.append(d)
     return result
+
+
+# ── User Bookings ────────────────────────────────────────────
+
+
+def get_bookings_by_user(user_id: str) -> list[dict]:
+    """Get all bookings for a user."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC",
+        (user_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_portfolio_stats(user_id: str) -> dict:
+    """
+    Get portfolio statistics for a user.
+    Returns: total_bookings, total_spent, favorite_route, upcoming_trips,
+             cancelled_count, total_by_airline
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Total bookings
+    cursor.execute(
+        "SELECT COUNT(*) as total FROM bookings WHERE user_id = ?",
+        (user_id,),
+    )
+    total_bookings = cursor.fetchone()["total"]
+
+    # Total spent (sum of total_amount where status != 'cancelled')
+    cursor.execute(
+        "SELECT SUM(CAST(total_amount AS REAL)) as total FROM bookings "
+        "WHERE user_id = ? AND status != 'cancelled'",
+        (user_id,),
+    )
+    row = cursor.fetchone()
+    total_spent = row["total"] if row["total"] else 0.0
+
+    # Cancelled count
+    cursor.execute(
+        "SELECT COUNT(*) as total FROM bookings "
+        "WHERE user_id = ? AND status = 'cancelled'",
+        (user_id,),
+    )
+    cancelled_count = cursor.fetchone()["total"]
+
+    # Favorite route (most frequent origin -> destination)
+    cursor.execute(
+        "SELECT origin, destination, COUNT(*) as cnt FROM bookings "
+        "WHERE user_id = ? "
+        "GROUP BY origin, destination ORDER BY cnt DESC LIMIT 1",
+        (user_id,),
+    )
+    fav = cursor.fetchone()
+    favorite_route = f"{fav['origin']} -> {fav['destination']}" if fav else ""
+
+    # Upcoming trips (future bookings with status 'confirmed')
+    from datetime import date
+    today = date.today().isoformat()
+    cursor.execute(
+        "SELECT * FROM bookings "
+        "WHERE user_id = ? AND departure_date >= ? AND status = 'confirmed' "
+        "ORDER BY departure_date ASC",
+        (user_id, today),
+    )
+    upcoming_trips = [dict(r) for r in cursor.fetchall()]
+
+    # Total by airline (from flight_summary patterns, best effort)
+    cursor.execute(
+        "SELECT flight_summary, COUNT(*) as cnt FROM bookings "
+        "WHERE user_id = ? AND flight_summary IS NOT NULL "
+        "GROUP BY flight_summary ORDER BY cnt DESC",
+        (user_id,),
+    )
+    total_by_airline = [dict(r) for r in cursor.fetchall()]
+
+    conn.close()
+
+    return {
+        "total_bookings": total_bookings,
+        "total_spent": f"{total_spent:.2f}",
+        "favorite_route": favorite_route,
+        "upcoming_trips": upcoming_trips,
+        "cancelled_count": cancelled_count,
+        "total_by_airline": total_by_airline,
+    }
+
+
+def update_booking_status(booking_id: str, status: str, **kwargs):
+    """
+    Update booking status and optional fields.
+    Args:
+        booking_id: The local booking ID.
+        status: New status (e.g. 'cancelled', 'rescheduled', 'confirmed').
+        **kwargs: Additional fields to update (e.g. duffel_order_id, booking_reference).
+    """
+    sets = ["status = ?"]
+    vals = [status]
+    for k, v in kwargs.items():
+        sets.append(f"{k} = ?")
+        vals.append(v)
+    vals.append(booking_id)
+    conn = get_db()
+    conn.execute(
+        f"UPDATE bookings SET {', '.join(sets)} WHERE id = ?",
+        vals,
+    )
+    conn.commit()
+    conn.close()
