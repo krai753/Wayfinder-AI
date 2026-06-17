@@ -229,10 +229,37 @@ function SplashScreen({ navigate }: { navigate: (s: Screen) => void }) {
 
 function HomeScreen({ navigate }: { navigate: (s: Screen) => void }) {
   const [micActive, setMicActive] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<"checking" | "online" | "offline">("checking");
+
+  useEffect(() => {
+    import("../services/api").then(({ api }) => {
+      api.health()
+        .then(() => setBackendStatus("online"))
+        .catch(() => setBackendStatus("offline"));
+    });
+  }, []);
 
   return (
     <div className="min-h-screen pb-28" style={{ background: "#0B1020" }}>
       <div className="px-5 pt-14 pb-8">
+        {/* Backend status badge */}
+        <div className="flex items-center justify-end mb-4">
+          <div className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium"
+            style={{
+              background: backendStatus === "online" ? "rgba(34,197,94,0.12)" : backendStatus === "offline" ? "rgba(239,68,68,0.12)" : "rgba(148,163,184,0.12)",
+              color: backendStatus === "online" ? "#22C55E" : backendStatus === "offline" ? "#EF4444" : "#94A3B8",
+              border: `1px solid ${backendStatus === "online" ? "rgba(34,197,94,0.2)" : backendStatus === "offline" ? "rgba(239,68,68,0.2)" : "rgba(148,163,184,0.2)"}`,
+            }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full"
+              style={{
+                background: backendStatus === "online" ? "#22C55E" : backendStatus === "offline" ? "#EF4444" : "#94A3B8",
+                boxShadow: backendStatus === "online" ? "0 0 6px #22C55E" : "none",
+              }}
+            />
+            {backendStatus === "checking" ? "Checking..." : backendStatus === "online" ? "Backend Connected" : "Backend Offline"}
+          </div>
+        </div>
         <div className="mb-6">
           <p className="text-sm text-[#94A3B8] mb-0.5">Good morning,</p>
           <h1 className="text-2xl font-extrabold text-white">Priya Sharma</h1>
