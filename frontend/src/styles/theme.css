@@ -1,0 +1,12 @@
+:root {
+  --background: #0B1020;
+  --foreground: #FFFFFF;
+  --primary: #4F46E5;
+  --accent: #22C55E;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Plus Jakarta Sans', Inter, sans-serif;
+}
