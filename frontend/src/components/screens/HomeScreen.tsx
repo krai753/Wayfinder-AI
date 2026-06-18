@@ -16,7 +16,6 @@ import {
   Bookmark,
   BarChart3,
   Sparkles,
-  Volume2,
   ArrowRight,
 } from "lucide-react";
 import { api } from "../../services/api";
@@ -26,7 +25,7 @@ import { speak } from "../../hooks/useSpeech";
 import { Card } from "../ui/Card";
 import { VoiceMicButton, MicState } from "../ui/VoiceMicButton";
 import { VoiceWave } from "../ui/VoiceWave";
-import { tokens, type, space, radius } from "../../design-system";
+import { tokens, type } from "../../design-system";
 import { NavFn } from "../../types";
 import { formatDateSpoken } from "../../lib/format";
 
@@ -202,7 +201,7 @@ export function HomeScreen({ navigate }: HomeScreenProps) {
               <VoiceWave active={micState === "listening"} size="md" />
               <p
                 className="text-slate-400 mt-5 max-w-xs"
-                style={type.bodySm}
+                style={type.bodySm as any}
               >
                 Try: "Book a flight from London to Paris tomorrow"
               </p>
@@ -224,7 +223,7 @@ export function HomeScreen({ navigate }: HomeScreenProps) {
               <button
                 onClick={() => navigate("bookings")}
                 className="text-slate-400 hover:text-white transition-colors"
-                style={type.labelSm}
+                style={type.labelSm as any}
                 aria-label="View all trips"
               >
                 View all →
@@ -254,7 +253,7 @@ export function HomeScreen({ navigate }: HomeScreenProps) {
                   >
                     {upcoming[0].origin} → {upcoming[0].destination}
                   </p>
-                  <p className="text-slate-400 mt-0.5" style={type.bodySm}>
+                  <p className="text-slate-400 mt-0.5" style={type.bodySm as any}>
                     {formatDateSpoken(upcoming[0].departure_date)}
                   </p>
                 </div>
@@ -349,7 +348,7 @@ function QuickAction({
             {label}
           </p>
           {sublabel && (
-            <p className="text-slate-400" style={type.caption}>
+            <p className="text-slate-400" style={type.caption as any}>
               {sublabel}
             </p>
           )}
