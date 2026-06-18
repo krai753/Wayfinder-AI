@@ -1,8 +1,13 @@
 /**
  * Wayfinder AI — App entry.
  * Wires up all screens + global state (wizard + user).
+ *
+ * Performance:
+ * - All screens are loaded via React.lazy + Suspense so the initial
+ *   bundle only ships Splash + Home + critical UI.
+ * - Suspense fallback is a premium branded loader.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 
 import { Screen, NavFn } from "../types";
@@ -12,6 +17,56 @@ import { speak, stopSpeaking } from "../hooks/useSpeech";
 
 import { BottomNav } from "../components/ui/BottomNav";
 import { SkipToContent } from "../components/ui/Accessibility";
+import { tokens } from "../design-system";
+
+// Eagerly loaded: needed for the very first paint
+import { SplashScreen } from "../components/screens/SplashScreen";
+import { HomeScreen } from "../components/screens/HomeScreen";
+import { VoiceScreen } from "../components/screens/VoiceScreen";
+
+// Lazily loaded: split out so they only download when first visited
+const AirportInput = lazy(() => import("../components/screens/AirportInput").then((m) => ({ default: m.AirportInput })));
+const DatePickerScreen = lazy(() => import("../components/screens/DatePickerScreen").then((m) => ({ default: m.DatePickerScreen })));
+const ResultsScreen = lazy(() => import("../components/screens/ResultsScreen").then((m) => ({ default: m.ResultsScreen })));
+const FlightDetailScreen = lazy(() => import("../components/screens/FlightDetailScreen").then((m) => ({ default: m.FlightDetailScreen })));
+const PassengerScreen = lazy(() => import("../components/screens/PassengerScreen").then((m) => ({ default: m.PassengerScreen })));
+const AccessibilityScreen = lazy(() => import("../components/screens/AccessibilityScreen").then((m) => ({ default: m.AccessibilityScreen })));
+const ReviewScreen = lazy(() => import("../components/screens/ReviewScreen").then((m) => ({ default: m.ReviewScreen })));
+const SuccessScreen = lazy(() => import("../components/screens/SuccessScreen").then((m) => ({ default: m.SuccessScreen })));
+const TripsScreen = lazy(() => import("../components/screens/TripsScreen").then((m) => ({ default: m.TripsScreen })));
+const TripDetailScreen = lazy(() => import("../components/screens/TripDetailScreen").then((m) => ({ default: m.TripDetailScreen })));
+const PortfolioScreen = lazy(() => import("../components/screens/PortfolioScreen").then((m) => ({ default: m.PortfolioScreen })));
+const AssistantScreen = lazy(() => import("../components/screens/AssistantScreen").then((m) => ({ default: m.AssistantScreen })));
+const ProfileScreen = lazy(() => import("../components/screens/ProfileScreen").then((m) => ({ default: m.ProfileScreen })));
+const SettingsScreen = lazy(() => import("../components/screens/SettingsScreen").then((m) => ({ default: m.SettingsScreen })));
+const LoadingScreen = lazy(() => import("../components/screens/LoadingScreen").then((m) => ({ default: m.LoadingScreen })));
+const OnboardingScreen = lazy(() => import("../components/screens/OnboardingScreen").then((m) => ({ default: m.OnboardingScreen })));
+
+const SCREEN_LABEL: Record<Screen, string> = {
+  splash: "Splash screen",
+  onboard1: "Onboarding, part 1",
+  onboard2: "Onboarding, part 2",
+  onboard3: "Onboarding, part 3",
+  home: "Home",
+  voice: "Voice assistant",
+  origin: "Choose departure airport",
+  destination: "Choose arrival airport",
+  dates: "Choose departure date",
+  loading: "Loading",
+  results: "Available flights",
+  flightDetail: "Flight details",
+  passenger: "Passenger details",
+  accessibility: "Accessibility",
+  review: "Review your trip",
+  payment: "Payment",
+  success: "Booking confirmed",
+  bookings: "My trips",
+  tripDetail: "Trip details",
+  assistant: "AI assistant",
+  profile: "Profile",
+  settingsScreen: "Settings",
+  portfolio: "Travel stats",
+};
 
 const SCREEN_LABEL: Record<Screen, string> = {
   splash: "Splash screen",
@@ -159,7 +214,23 @@ function AppInner() {
             transition={{ duration: 0.22, ease: "easeOut" }}
             className="min-h-screen"
           >
-            {renderScreen()}
+            <Suspense
+              fallback={
+                <div
+                  className="min-h-screen flex items-center justify-center"
+                  style={{ background: tokens.color.bg.deep }}
+                  role="status"
+                  aria-live="polite"
+                >
+                  <div
+                    className="w-12 h-12 border-[3px] border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin"
+                    aria-hidden="true"
+                  />
+                </div>
+              }
+            >
+              {renderScreen()}
+            </Suspense>
           </motion.div>
         </AnimatePresence>
         <BottomNav current={screen} navigate={navigate} />
