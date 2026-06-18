@@ -2,15 +2,42 @@
  * Wayfinder AI — App entry.
  * Wires up all screens + global state (wizard + user).
  */
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 
 import { Screen, NavFn } from "../types";
 import { WizardProvider } from "../hooks/useWizard";
 import { UserProvider } from "../hooks/useUser";
+import { speak, stopSpeaking } from "../hooks/useSpeech";
 
 import { BottomNav } from "../components/ui/BottomNav";
 import { SkipToContent } from "../components/ui/Accessibility";
+
+const SCREEN_LABEL: Record<Screen, string> = {
+  splash: "Splash screen",
+  onboard1: "Onboarding, part 1",
+  onboard2: "Onboarding, part 2",
+  onboard3: "Onboarding, part 3",
+  home: "Home",
+  voice: "Voice assistant",
+  origin: "Choose departure airport",
+  destination: "Choose arrival airport",
+  dates: "Choose departure date",
+  loading: "Loading",
+  results: "Available flights",
+  flightDetail: "Flight details",
+  passenger: "Passenger details",
+  accessibility: "Accessibility",
+  review: "Review your trip",
+  payment: "Payment",
+  success: "Booking confirmed",
+  bookings: "My trips",
+  tripDetail: "Trip details",
+  assistant: "AI assistant",
+  profile: "Profile",
+  settingsScreen: "Settings",
+  portfolio: "Travel stats",
+};
 import { SplashScreen } from "../components/screens/SplashScreen";
 import { HomeScreen } from "../components/screens/HomeScreen";
 import { VoiceScreen } from "../components/screens/VoiceScreen";
@@ -34,11 +61,26 @@ import { OnboardingScreen } from "../components/screens/OnboardingScreen";
 function AppInner() {
   const [screen, setScreen] = useState<Screen>("splash");
   const [params, setParams] = useState<Record<string, any> | undefined>(undefined);
+  const previousScreen = useRef<Screen>("splash");
 
   const navigate: NavFn = useCallback((s, p) => {
+    // Cancel any in-flight speech before announcing the new screen,
+    // so a blind user gets exactly one announcement per navigation.
+    stopSpeaking();
     setParams(p);
     setScreen(s);
   }, []);
+
+  // Global TTS announcement on every screen change — critical for
+  // blind users so they always know where they are without having
+  // to remember. Each screen can also speak its own content via
+  // useAutoRead; this just announces the route.
+  useEffect(() => {
+    if (screen === previousScreen.current) return;
+    const label = SCREEN_LABEL[screen] || screen;
+    speak({ text: label });
+    previousScreen.current = screen;
+  }, [screen]);
 
   function renderScreen() {
     switch (screen) {
