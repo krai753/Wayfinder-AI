@@ -28,6 +28,7 @@ import { useWizard } from "../../hooks/useWizard";
 import { useUser } from "../../hooks/useUser";
 import { useSpeech, speak } from "../../hooks/useSpeech";
 import { Card } from "../ui/Card";
+import { api } from "../../services/api";
 import { tokens, type } from "../../design-system";
 import { NavFn } from "../../types";
 import {
@@ -186,7 +187,7 @@ export function ReviewScreen({ navigate }: ReviewScreenProps) {
             <h1 className="text-white" style={type.h3}>
               Review your trip
             </h1>
-            <p className="text-slate-400 truncate" style={type.bodySm}>
+            <p className="text-slate-400 truncate" style={type.bodySm as any}>
               {profile.name}, please confirm below
             </p>
           </div>
@@ -209,7 +210,7 @@ export function ReviewScreen({ navigate }: ReviewScreenProps) {
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
         >
           <Card variant="tinted" padding="xl" className="text-center">
-            <p className="text-indigo-300 mb-4" style={type.eyebrow}>
+            <p className="text-indigo-300 mb-4" style={type.eyebrow as any}>
               Your trip
             </p>
             <div className="flex items-center gap-4">
@@ -225,7 +226,7 @@ export function ReviewScreen({ navigate }: ReviewScreenProps) {
                 >
                   {origin.iata}
                 </p>
-                <p className="text-slate-400 mt-2 truncate" style={type.bodySm}>
+                <p className="text-slate-400 mt-2 truncate" style={type.bodySm as any}>
                   {origin.city}
                 </p>
               </div>
@@ -261,7 +262,7 @@ export function ReviewScreen({ navigate }: ReviewScreenProps) {
                 >
                   {destination.iata}
                 </p>
-                <p className="text-slate-400 mt-2 truncate" style={type.bodySm}>
+                <p className="text-slate-400 mt-2 truncate" style={type.bodySm as any}>
                   {destination.city}
                 </p>
               </div>
@@ -285,7 +286,7 @@ export function ReviewScreen({ navigate }: ReviewScreenProps) {
             >
               <Plane size={20} className="text-indigo-300" />
             </div>
-            <p className="text-white" style={{ ...type.bodyLg, fontWeight: 700 }}>
+            <p className="text-white" style={{ ...type.bodyLg as any, fontWeight: 700 }}>
               Flight details
             </p>
           </div>
@@ -309,7 +310,7 @@ export function ReviewScreen({ navigate }: ReviewScreenProps) {
             >
               <User size={20} className="text-indigo-300" />
             </div>
-            <p className="text-white" style={{ ...type.bodyLg, fontWeight: 700 }}>
+            <p className="text-white" style={{ ...type.bodyLg as any, fontWeight: 700 }}>
               Passenger
             </p>
             <button
@@ -346,7 +347,7 @@ export function ReviewScreen({ navigate }: ReviewScreenProps) {
         <Card variant="raised" padding="md" ariaLabel="Total price">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-slate-400" style={type.eyebrow}>
+              <p className="text-slate-400" style={type.eyebrow as any}>
                 Total
               </p>
               <p
@@ -376,16 +377,16 @@ export function ReviewScreen({ navigate }: ReviewScreenProps) {
 
         {error && (
           <div role="alert" className="p-5 rounded-2xl bg-red-500/10 border border-red-400/30">
-            <p className="text-red-100" style={{ ...type.bodyLg, fontWeight: 700 }}>
+            <p className="text-red-100" style={{ ...type.bodyLg as any, fontWeight: 700 }}>
               Booking failed
             </p>
-            <p className="text-red-200/80 mt-1" style={type.bodySm}>
+            <p className="text-red-200/80 mt-1" style={type.bodySm as any}>
               {error}
             </p>
           </div>
         )}
 
-        <p className="text-center text-slate-400" style={type.bodySm}>
+        <p className="text-center text-slate-400" style={type.bodySm as any}>
           Say "confirm" or "yes" — I'll book it
         </p>
 
@@ -448,7 +449,7 @@ function Row({
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="text-slate-400" style={type.eyebrow}>
+      <span className="text-slate-400" style={type.eyebrow as any}>
         {label}
       </span>
       <span
