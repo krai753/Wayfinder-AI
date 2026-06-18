@@ -1,5 +1,9 @@
 name: CI
 
+# One single CI workflow — typecheck + build + backend syntax.
+# No duplicates, no Lint that's just `continue-on-error: true` with
+# tsc again, no artifact uploads. Just the essentials.
+
 on:
   push:
     branches: [main, master, develop]
@@ -9,7 +13,7 @@ on:
 jobs:
   # ── Frontend: type-check + build ─────────────────────────────
   frontend:
-    name: Frontend (TypeScript + Build)
+    name: Frontend (typecheck + build)
     runs-on: ubuntu-latest
     timeout-minutes: 12
     defaults:
@@ -38,7 +42,8 @@ jobs:
         env:
           CI: true
 
-      - name: Upload build artifact
+      - name: Upload dist artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: frontend-dist
@@ -46,7 +51,7 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
-  # ── Backend: syntax + import check ───────────────────────────
+  # ── Backend: Python syntax check ─────────────────────────────
   backend:
     name: Backend (Python syntax)
     runs-on: ubuntu-latest
@@ -66,7 +71,7 @@ jobs:
         run: |
           python -m compileall -q app.py config.py database.py duffel_client.py llm_orchestrator.py models.py voice_engine.py wizard_manager.py airport_data.py routers/
 
-      - name: Import smoke test
+      - name: Parse all Python files
         run: |
           python -c "
           import ast, pathlib, sys
