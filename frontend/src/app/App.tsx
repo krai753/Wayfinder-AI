@@ -10,6 +10,7 @@ import { WizardProvider } from "../hooks/useWizard";
 import { UserProvider } from "../hooks/useUser";
 
 import { BottomNav } from "../components/ui/BottomNav";
+import { SkipToContent } from "../components/ui/Accessibility";
 import { SplashScreen } from "../components/screens/SplashScreen";
 import { HomeScreen } from "../components/screens/HomeScreen";
 import { VoiceScreen } from "../components/screens/VoiceScreen";
@@ -101,9 +102,11 @@ function AppInner() {
         fontFamily: "'Plus Jakarta Sans', Inter, sans-serif",
       }}
     >
+      <SkipToContent />
       <div
         className="relative w-full max-w-sm min-h-screen overflow-hidden"
         style={{ background: "#0B1020" }}
+        id="main-content"
       >
         <AnimatePresence mode="wait">
           <motion.div
