@@ -194,7 +194,7 @@ export function AirportInput({ navigate, field }: AirportInputProps) {
             <ArrowLeft size={26} color="#fff" strokeWidth={2.5} aria-hidden="true" />
           </button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-white" style={type.h3}>
+            <h1 className="text-white" style={type.h3 as any}>
               {title}
             </h1>
             <p className="text-slate-400 truncate" style={type.bodySm as any}>
