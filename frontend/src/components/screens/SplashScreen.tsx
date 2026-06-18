@@ -12,7 +12,7 @@
  * - ARIA-live region for screen readers
  */
 import { useEffect } from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
 import { Navigation, ArrowRight, Volume2, Sparkles } from "lucide-react";
 import { speak } from "../../hooks/useSpeech";
 import { Button } from "../ui/Button";
@@ -25,8 +25,6 @@ interface SplashScreenProps {
 }
 
 export function SplashScreen({ navigate }: SplashScreenProps) {
-  const reduced = useReducedMotion();
-
   useEffect(() => {
     const t = setTimeout(() => navigate("home"), 3000);
     speak({
@@ -150,7 +148,7 @@ export function SplashScreen({ navigate }: SplashScreenProps) {
         animate={{ opacity: 1 }}
         transition={{ delay: 0.6, duration: 0.6 }}
         className="relative z-10 text-slate-400 max-w-xs mx-auto mb-16"
-        style={type.body}
+        style={type.body as any}
       >
         Powered by Duffel • Built for blind and visually impaired travelers
       </motion.p>
