@@ -6,7 +6,7 @@
  * - Each card has select button (60px+) and read-aloud button
  * - Tapping a card selects it and advances to passenger screen
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import {
   ArrowLeft,
@@ -19,7 +19,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useWizard } from "../../hooks/useWizard";
-import { useSpeech, speak } from "../../hooks/useSpeech";
+import { speak } from "../../hooks/useSpeech";
 import { GlassCard } from "../ui/GlassCard";
 import { Badge } from "../ui/Badge";
 import { NavFn } from "../../types";
@@ -28,7 +28,6 @@ import {
   formatPrice,
   formatTime,
   parseDurationToMinutes,
-  priceNumber,
   stopLabel,
   formatDateSpoken,
 } from "../../lib/format";
@@ -253,7 +252,6 @@ function FlightOfferCard({
   onSelect,
   onReadAloud,
 }: FlightOfferCardProps) {
-  const price = priceNumber(offer.price);
   return (
     <GlassCard
       className={`p-5 ${isCheapest ? "ring-2 ring-emerald-400/40 border-emerald-400/40" : ""} ${isSelected ? "ring-2 ring-indigo-400/60" : ""}`}

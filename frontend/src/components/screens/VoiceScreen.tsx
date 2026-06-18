@@ -35,7 +35,7 @@ interface VoiceScreenProps {
 }
 
 export function VoiceScreen({ navigate }: VoiceScreenProps) {
-  const { startSession, origin, destination, departureDate } = useWizard();
+  const { startSession } = useWizard();
   const { profile } = useUser();
   const [state, setState] = useState<MicState>("idle");
   const [transcript, setTranscript] = useState("");

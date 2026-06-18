@@ -32,9 +32,9 @@ import { GlassCard } from "../ui/GlassCard";
 import { PrimaryButton } from "../ui/PrimaryButton";
 import { Badge } from "../ui/Badge";
 import { NavFn } from "../../types";
-import { formatDateSpoken, formatTime, stopLabel } from "../../lib/format";
-import type { BookingResult, RescheduleOffer } from "../../types";
+import { formatDateSpoken, formatTime } from "../../lib/format";
 import { addDaysIso, todayIso } from "../../lib/format";
+import type { RescheduleOffer } from "../../types";
 
 interface TripDetailScreenProps {
   navigate: NavFn;
@@ -61,10 +61,11 @@ export function TripDetailScreen({ navigate, params }: TripDetailScreenProps) {
   }, [booking, navigate]);
 
   if (!booking) return null;
+  const b = booking;
 
   function handleReadBooking() {
     speak({
-      text: `From ${booking.origin} to ${booking.destination}, on ${formatDateSpoken(booking.departure_date)}. Status ${booking.status}. Reference ${booking.booking_reference || "pending"}. ${booking.total_amount || ""}.`,
+      text: `From ${b.origin} to ${b.destination}, on ${formatDateSpoken(b.departure_date)}. Status ${b.status}. Reference ${b.booking_reference || "pending"}. ${b.total_amount || ""}.`,
     });
   }
 
@@ -73,7 +74,7 @@ export function TripDetailScreen({ navigate, params }: TripDetailScreenProps) {
     setCancelLoading(true);
     setCancelError(null);
     try {
-      const res: any = await api.cancelBooking(booking.id);
+      const res: any = await api.cancelBooking(b.id);
       setCancelData(res);
       speak({
         text: `Cancellation initiated. You'll get ${res.refund_amount} ${res.refund_currency} back. Say "confirm" or tap the confirm button.`,
@@ -91,7 +92,7 @@ export function TripDetailScreen({ navigate, params }: TripDetailScreenProps) {
     setCancelLoading(true);
     setCancelError(null);
     try {
-      await api.confirmCancellation(booking.id, cancelData.cancellation_id);
+      await api.confirmCancellation(b.id, cancelData.cancellation_id);
       setFlow("cancel-done");
       speak({ text: `Booking cancelled. ${cancelData.refund_amount} ${cancelData.refund_currency} will be refunded.` });
       await refreshTrips();
@@ -112,7 +113,7 @@ export function TripDetailScreen({ navigate, params }: TripDetailScreenProps) {
     setRescheduleLoading(true);
     setRescheduleError(null);
     try {
-      const res = await api.rescheduleSearch(booking.id, newDate);
+      const res = await api.rescheduleSearch(b.id, newDate);
       setRescheduleOptions(res.change_offers || []);
       speak({
         text: `Found ${res.change_offers?.length || 0} reschedule options for ${formatDateSpoken(newDate)}.`,
@@ -130,7 +131,7 @@ export function TripDetailScreen({ navigate, params }: TripDetailScreenProps) {
     setRescheduleLoading(true);
     setRescheduleError(null);
     try {
-      await api.rescheduleConfirm(booking.id, selectedOffer.offer_id);
+      await api.rescheduleConfirm(b.id, selectedOffer.offer_id);
       setFlow("reschedule-done");
       speak({ text: `Reschedule confirmed. ${selectedOffer.airline} on ${formatDateSpoken(newDate)}.` });
       await refreshTrips();
@@ -169,7 +170,7 @@ export function TripDetailScreen({ navigate, params }: TripDetailScreenProps) {
           <div className="flex-1 min-w-0">
             <h1 className="text-xl font-extrabold text-white">Trip details</h1>
             <p className="text-sm text-slate-400 truncate">
-              {booking.origin} → {booking.destination}
+              {b.origin} → {b.destination}
             </p>
           </div>
           <button
@@ -201,49 +202,49 @@ export function TripDetailScreen({ navigate, params }: TripDetailScreenProps) {
               <div className="flex items-center gap-3 mb-4">
                 <Badge
                   color={
-                    booking.status === "cancelled"
+                    b.status === "cancelled"
                       ? "red"
-                      : booking.status === "rescheduled"
+                      : b.status === "rescheduled"
                         ? "amber"
                         : "green"
                   }
                 >
-                  {booking.status || "confirmed"}
+                  {b.status || "confirmed"}
                 </Badge>
               </div>
               <div className="flex items-center gap-3 mb-4">
                 <div className="text-center flex-1">
-                  <p className="text-3xl font-extrabold text-white">{booking.origin}</p>
+                  <p className="text-3xl font-extrabold text-white">{b.origin}</p>
                 </div>
                 <Plane size={20} className="text-slate-400" aria-hidden="true" />
                 <div className="text-center flex-1">
                   <p className="text-3xl font-extrabold text-white">
-                    {booking.destination}
+                    {b.destination}
                   </p>
                 </div>
               </div>
               <div className="flex items-center justify-center gap-2 text-base text-slate-300">
                 <Calendar size={16} aria-hidden="true" />
-                <span>{formatDateSpoken(booking.departure_date)}</span>
+                <span>{formatDateSpoken(b.departure_date)}</span>
               </div>
               <div className="mt-4 pt-4 border-t border-white/8 space-y-2 text-sm">
-                <Row label="Reference" value={booking.booking_reference || "—"} mono />
-                <Row label="Passenger" value={booking.passenger_name || "—"} />
+                <Row label="Reference" value={b.booking_reference || "—"} mono />
+                <Row label="Passenger" value={b.passenger_name || "—"} />
                 <Row
                   label="Assistance"
                   value={
-                    booking.passenger_assistance === "wheelchair"
+                    b.passenger_assistance === "wheelchair"
                       ? "Wheelchair"
-                      : booking.passenger_assistance === "visual"
+                      : b.passenger_assistance === "visual"
                         ? "Visual"
                         : "None"
                   }
                 />
-                {booking.total_amount && <Row label="Total" value={booking.total_amount} />}
+                {b.total_amount && <Row label="Total" value={b.total_amount} />}
               </div>
             </GlassCard>
 
-            {booking.status !== "cancelled" && booking.duffel_order_id && (
+            {b.status !== "cancelled" && b.duffel_order_id && (
               <div className="space-y-3">
                 <PrimaryButton
                   onClick={handleRescheduleClick}
@@ -266,12 +267,12 @@ export function TripDetailScreen({ navigate, params }: TripDetailScreenProps) {
                 </PrimaryButton>
               </div>
             )}
-            {!booking.duffel_order_id && (
+            {!b.duffel_order_id && (
               <GlassCard className="p-4" ariaLabel="Notice">
                 <div className="flex items-start gap-3">
                   <AlertCircle size={20} className="text-amber-300 shrink-0 mt-0.5" aria-hidden="true" />
                   <p className="text-sm text-amber-100">
-                    Cancel and reschedule require a confirmed Duffel booking.
+                    Cancel and reschedule require a confirmed Duffel b.
                   </p>
                 </div>
               </GlassCard>

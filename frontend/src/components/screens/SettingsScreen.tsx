@@ -1,13 +1,11 @@
 /**
  * SettingsScreen — accessibility & voice preferences.
  */
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   Volume2,
-  Type,
   Eye,
-  Hand,
   Save,
   Check,
 } from "lucide-react";

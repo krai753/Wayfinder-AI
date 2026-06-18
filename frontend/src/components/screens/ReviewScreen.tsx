@@ -16,7 +16,6 @@ import {
   Pencil,
   Plane,
   User,
-  Calendar,
   Heart,
   ShieldCheck,
 } from "lucide-react";

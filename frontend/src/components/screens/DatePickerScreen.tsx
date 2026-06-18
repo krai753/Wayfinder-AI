@@ -9,9 +9,9 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { ArrowLeft, Calendar, Mic, Send, Volume2, Sparkles, Plane } from "lucide-react";
+import { ArrowLeft, Calendar, Mic, Send, Volume2, Plane } from "lucide-react";
 import { useWizard } from "../../hooks/useWizard";
-import { useSpeech, speak } from "../../hooks/useSpeech";
+import { speak } from "../../hooks/useSpeech";
 import { GlassCard } from "../ui/GlassCard";
 import { PrimaryButton } from "../ui/PrimaryButton";
 import { NavFn } from "../../types";

@@ -8,7 +8,7 @@
  */
 import { useEffect } from "react";
 import { motion } from "motion/react";
-import { Check, Volume2, Plane, Home, Bookmark, Calendar, VolumeX } from "lucide-react";
+import { Check, Volume2, Plane, Home, Bookmark, Calendar } from "lucide-react";
 import { useWizard } from "../../hooks/useWizard";
 import { useUser } from "../../hooks/useUser";
 import { speak, stopSpeaking } from "../../hooks/useSpeech";

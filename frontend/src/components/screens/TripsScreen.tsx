@@ -15,7 +15,7 @@ import { GlassCard } from "../ui/GlassCard";
 import { Badge } from "../ui/Badge";
 import { PrimaryButton } from "../ui/PrimaryButton";
 import { NavFn } from "../../types";
-import { formatDateSpoken, formatTime, stopLabel } from "../../lib/format";
+import { formatDateSpoken } from "../../lib/format";
 import type { BookingResult } from "../../types";
 
 interface TripsScreenProps {

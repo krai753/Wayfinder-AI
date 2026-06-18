@@ -6,15 +6,12 @@
  * - Quick-action chips for common intents
  */
 import { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import {
   Sparkles,
   Send,
   Volume2,
   VolumeX,
-  Plane,
-  Bookmark,
-  X,
   Mic,
   BarChart3,
 } from "lucide-react";
@@ -22,7 +19,6 @@ import { useUser } from "../../hooks/useUser";
 import { useWizard } from "../../hooks/useWizard";
 import { api } from "../../services/api";
 import { useSpeech, speak, stopSpeaking } from "../../hooks/useSpeech";
-import { GlassCard } from "../ui/GlassCard";
 import { NavFn } from "../../types";
 
 interface AssistantScreenProps {

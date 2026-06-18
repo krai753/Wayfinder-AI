@@ -73,9 +73,12 @@ export interface BookingResult {
   destination: string;
   departure_date: string;
   passenger_name?: string;
+  passenger_assistance?: string;
   flight_summary?: string;
   total_amount?: string;
+  total_currency?: string;
   booking_reference?: string;
+  duffel_order_id?: string;
   created_at?: string;
 }
 

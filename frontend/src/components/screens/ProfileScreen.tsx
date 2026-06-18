@@ -2,7 +2,6 @@
  * ProfileScreen — user profile + quick links to settings and stats.
  */
 import { useState } from "react";
-import { motion } from "motion/react";
 import {
   User,
   Settings,
