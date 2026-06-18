@@ -12,6 +12,9 @@ import {
   Send,
   Volume2,
   VolumeX,
+  Plane,
+  Bookmark,
+  X,
   Mic,
   BarChart3,
 } from "lucide-react";
