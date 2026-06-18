@@ -207,7 +207,7 @@ export function VoiceScreen({ navigate }: VoiceScreenProps) {
           <h1 className="text-white" style={{ ...type.h3, fontWeight: 700 }}>
             Voice Assistant
           </h1>
-          <p className="text-slate-400 truncate" style={type.bodySm}>
+          <p className="text-slate-400 truncate" style={type.bodySm as any}>
             Say anything to {profile.name.split(" ")[0]}
           </p>
         </div>
@@ -235,7 +235,7 @@ export function VoiceScreen({ navigate }: VoiceScreenProps) {
               transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
               className="text-center mb-10"
             >
-              <p className="text-indigo-300 mb-2" style={type.eyebrow}>
+              <p className="text-indigo-300 mb-2" style={type.eyebrow as any}>
                 Try saying
               </p>
               <p
@@ -244,7 +244,7 @@ export function VoiceScreen({ navigate }: VoiceScreenProps) {
               >
                 "Book a flight from London to Paris tomorrow"
               </p>
-              <p className="text-slate-400 mt-3" style={type.bodySm}>
+              <p className="text-slate-400 mt-3" style={type.bodySm as any}>
                 or "Show my trips" • "Cancel my booking"
               </p>
             </motion.div>
@@ -278,7 +278,7 @@ export function VoiceScreen({ navigate }: VoiceScreenProps) {
               className="w-full mb-4"
             >
               <Card variant="default" padding="md" ariaLabel="You said">
-                <p className="text-slate-400 mb-2" style={type.eyebrow}>
+                <p className="text-slate-400 mb-2" style={type.eyebrow as any}>
                   You said
                 </p>
                 <p
@@ -315,13 +315,13 @@ export function VoiceScreen({ navigate }: VoiceScreenProps) {
                   >
                     <Sparkles size={16} color="#fff" />
                   </div>
-                  <p className="text-indigo-300" style={type.eyebrow}>
+                  <p className="text-indigo-300" style={type.eyebrow as any}>
                     Assistant
                   </p>
                   {isSpeaking && (
                     <span
                       className="ml-auto flex items-center gap-1.5 text-emerald-300"
-                      style={type.caption}
+                      style={type.caption as any}
                     >
                       <Volume2 size={12} aria-hidden="true" />
                       <span>Reading aloud</span>
@@ -384,7 +384,7 @@ export function VoiceScreen({ navigate }: VoiceScreenProps) {
             <Card variant="default" padding="md">
               <div className="flex items-center gap-2 mb-3">
                 <Type size={18} className="text-slate-300" aria-hidden="true" />
-                <p className="text-slate-300" style={type.label}>
+                <p className="text-slate-300" style={type.label as any}>
                   {speech.isSupported ? "Type your command" : "Voice not supported — type"}
                 </p>
               </div>
@@ -405,7 +405,7 @@ export function VoiceScreen({ navigate }: VoiceScreenProps) {
                 placeholder='e.g. "Book a flight from London to Paris tomorrow"'
                 rows={3}
                 className="w-full rounded-xl bg-black/30 border border-white/10 p-4 text-white placeholder:text-slate-500 focus:outline-none focus:ring-4 focus:ring-indigo-300/60 focus:border-indigo-300/60 resize-none"
-                style={type.body}
+                style={type.body as any}
               />
               <div className="mt-3 flex gap-2">
                 <Button
@@ -440,7 +440,7 @@ export function VoiceScreen({ navigate }: VoiceScreenProps) {
             type="button"
             onClick={() => setShowTextFallback(true)}
             className="mt-6 text-slate-400 hover:text-white underline underline-offset-4 focus:outline-none focus:ring-4 focus:ring-indigo-300/60 rounded-lg px-3 py-2"
-            style={type.bodySm}
+            style={type.bodySm as any}
           >
             Type instead
           </button>
@@ -451,7 +451,7 @@ export function VoiceScreen({ navigate }: VoiceScreenProps) {
             type="button"
             onClick={handleClear}
             className="mt-4 inline-flex items-center gap-2 text-slate-400 hover:text-white focus:outline-none focus:ring-4 focus:ring-indigo-300/60 rounded-lg px-3 py-2"
-            style={type.bodySm}
+            style={type.bodySm as any}
           >
             <X size={16} aria-hidden="true" />
             <span>Start over</span>
