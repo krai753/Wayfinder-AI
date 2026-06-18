@@ -32,6 +32,8 @@ interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, "onClick"> {
   onClick?: () => void;
   ariaLabel?: string;
   ariaLabelledBy?: string;
+  /** Marks the current item in a list (e.g. selected airport). */
+  ariaCurrent?: "true" | "false" | "step" | "location" | "date" | "time" | boolean;
   selected?: boolean;
   /** Disable press feedback even if onClick is provided. */
   staticPress?: boolean;
@@ -77,6 +79,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
     onClick,
     ariaLabel,
     ariaLabelledBy,
+    ariaCurrent,
     selected,
     staticPress = false,
     className = "",
@@ -106,6 +109,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
       onKeyDown={handleKey}
       role={interactive ? "button" : rest.role}
       tabIndex={interactive ? 0 : rest.tabIndex}
+      aria-current={ariaCurrent}
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
       aria-pressed={selected !== undefined ? selected : undefined}

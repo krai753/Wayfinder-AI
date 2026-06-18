@@ -22,7 +22,6 @@ import {
   ArrowLeftRight,
   ArrowLeft,
   Mic,
-  Building2,
   History,
   Sparkles,
 } from "lucide-react";
