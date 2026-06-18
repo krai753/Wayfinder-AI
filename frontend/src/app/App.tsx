@@ -18,6 +18,11 @@ import { speak, stopSpeaking } from "../hooks/useSpeech";
 import { BottomNav } from "../components/ui/BottomNav";
 import { SkipToContent } from "../components/ui/Accessibility";
 import { tokens } from "../design-system";
+import { PersistentHelpButton } from "../components/ui/PersistentHelpButton";
+
+const LazyPersistentHelpButton = lazy(() =>
+  import("../components/ui/PersistentHelpButton").then((m) => ({ default: m.PersistentHelpButton }))
+);
 
 // Eagerly loaded: needed for the very first paint
 import { SplashScreen } from "../components/screens/SplashScreen";
@@ -146,6 +151,47 @@ function AppInner() {
     }
   }
 
+  // Broadcast the current screen to non-React consumers
+  // (used by PersistentHelpButton via useLocation hook).
+  // The flag is read by the hook on mount and on every change.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    (window as any).__WAYFINDER_SCREEN__ = screen;
+    window.dispatchEvent(new CustomEvent("wayfinder:screen-change"));
+  }, [screen]);
+
+  // Determine if PersistentHelpButton should be shown
+  // (hide on splash, onboarding, success — those have their own CTAs)
+  const helpScreens: Screen[] = [
+    "home", "voice", "origin", "destination", "dates", "results",
+    "flightDetail", "passenger", "accessibility", "review",
+    "bookings", "tripDetail", "assistant", "profile", "settingsScreen", "portfolio",
+  ];
+  const showHelp = helpScreens.includes(screen);
+
+  // Build a back handler for the help button
+  const backHandler = useCallback(() => {
+    const back: Partial<Record<Screen, Screen>> = {
+      voice: "home",
+      origin: "home",
+      destination: "origin",
+      dates: "destination",
+      results: "dates",
+      flightDetail: "results",
+      passenger: "results",
+      accessibility: "passenger",
+      review: "accessibility",
+      bookings: "home",
+      tripDetail: "bookings",
+      assistant: "home",
+      profile: "home",
+      settingsScreen: "profile",
+      portfolio: "profile",
+    };
+    const target = back[screen];
+    if (target) navigate(target);
+  }, [screen, navigate]);
+
   return (
     <div
       className="min-h-screen w-full flex items-center justify-center"
@@ -189,6 +235,12 @@ function AppInner() {
           </motion.div>
         </AnimatePresence>
         <BottomNav current={screen} navigate={navigate} />
+        {showHelp && (
+          <LazyPersistentHelpButton
+            navigate={navigate}
+            onBack={backHandler}
+          />
+        )}
       </div>
     </div>
   );
