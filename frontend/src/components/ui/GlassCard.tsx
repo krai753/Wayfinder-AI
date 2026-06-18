@@ -9,4 +9,5 @@
  * To delete in the future: migrate the 9 remaining screens to
  * import from `../ui/Card` directly, then delete this file.
  */
-export { Card as GlassCard, type CardProps as GlassCardProps } from "./Card";
+export { Card as GlassCard } from "./Card";
+export type { CardProps as GlassCardProps } from "./Card";

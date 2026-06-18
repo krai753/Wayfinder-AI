@@ -10,4 +10,5 @@
  * To delete in the future: migrate the 7 remaining screens to
  * import from `../ui/Button` directly, then delete this file.
  */
-export { Button as PrimaryButton, type ButtonProps as PrimaryButtonProps } from "./Button";
+export { Button as PrimaryButton } from "./Button";
+export type { ButtonProps as PrimaryButtonProps } from "./Button";
