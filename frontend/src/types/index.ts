@@ -137,3 +137,21 @@ export interface VoiceListenResult {
 export interface ApiError {
   detail: string;
 }
+
+// ── Navigation ──────────────────────────────────────────────────────
+
+/**
+ * All possible screens in the app. Kept in sync with App.tsx Screen union.
+ * Screens that share the "wizard flow" forward/back chain are in chronological order.
+ */
+export type Screen =
+  | "splash" | "onboard1" | "onboard2" | "onboard3"
+  | "home" | "voice"
+  | "origin" | "destination" | "dates"
+  | "loading" | "results" | "flightDetail"
+  | "passenger" | "accessibility" | "review" | "payment" | "success"
+  | "bookings" | "tripDetail"
+  | "assistant" | "profile" | "settingsScreen"
+  | "portfolio";
+
+export type NavFn = (s: Screen, params?: Record<string, any>) => void;
