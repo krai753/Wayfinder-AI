@@ -1,10 +1,16 @@
 /**
- * ResultsScreen — displays flight offers sorted by price.
+ * ResultsScreen — flight offers, sorted by price.
  *
- * - Auto-reads the cheapest option aloud when results load
- * - Highlights cheapest in green
- * - Each card has select button (60px+) and read-aloud button
- * - Tapping a card selects it and advances to passenger screen
+ * Refactored to premium quality:
+ * - Hero "Read all aloud" action at the top
+ * - Cheapest flight highlighted (emerald ring + 'Cheapest' badge)
+ * - Doppelrand cards (Card component) for each offer
+ * - "Select" Button with Button-in-Button trailing checkmark
+ * - Massive departure/arrival times (4xl) for low-vision users
+ * - Auto-reads cheapest option on arrival
+ * - Empty state with friendly CTA
+ * - Loading state with branded spinner
+ * - All accessibility preserved
  */
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
@@ -20,8 +26,10 @@ import {
 } from "lucide-react";
 import { useWizard } from "../../hooks/useWizard";
 import { speak } from "../../hooks/useSpeech";
-import { GlassCard } from "../ui/GlassCard";
+import { Card } from "../ui/Card";
 import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
+import { tokens, type } from "../../design-system";
 import { NavFn } from "../../types";
 import {
   formatDuration,
@@ -52,7 +60,6 @@ export function ResultsScreen({ navigate }: ResultsScreenProps) {
   } = useWizard();
   const [spokenOnce, setSpokenOnce] = useState(false);
 
-  // Auto-speak cheapest on first render
   useEffect(() => {
     if (spokenOnce || offers.length === 0 || !cheapestOffer) return;
     setSpokenOnce(true);
@@ -65,18 +72,23 @@ export function ResultsScreen({ navigate }: ResultsScreenProps) {
     speak({ text });
   }, [spokenOnce, offers, cheapestOffer, origin, destination, departureDate]);
 
-  // If we land here without a search, kick one off
   useEffect(() => {
-    if (offers.length === 0 && !loading && !error && origin && destination && departureDate) {
+    if (
+      offers.length === 0 &&
+      !loading &&
+      !error &&
+      origin &&
+      destination &&
+      departureDate
+    ) {
       searchFlights().catch(() => {});
     }
   }, [offers.length, loading, error, origin, destination, departureDate, searchFlights]);
 
   function handleSelect(o: FlightOffer) {
     setSelectedOffer(o);
-    const c = o;
     speak({
-      text: `Selected ${c.airline} flight ${c.flight_number} for ${formatPrice(c.price, c.currency)}.`,
+      text: `Selected ${o.airline} flight ${o.flight_number} for ${formatPrice(o.price, o.currency)}.`,
     });
     navigate("passenger");
   }
@@ -97,15 +109,18 @@ export function ResultsScreen({ navigate }: ResultsScreenProps) {
   }
 
   return (
-    <div className="min-h-screen pb-32" style={{ background: "#0B1020" }}>
-      {/* Header */}
+    <div
+      className="min-h-[100dvh] pb-32"
+      style={{ background: tokens.color.bg.deep }}
+    >
       <div
-        className="sticky top-0 z-20 px-4 pt-4 pb-3"
+        className="sticky top-0 z-20 px-5 pt-4 pb-3"
         style={{
           paddingTop: "max(1rem, env(safe-area-inset-top))",
           background:
-            "linear-gradient(180deg, rgba(11,16,32,0.95) 0%, rgba(11,16,32,0.75) 80%, transparent 100%)",
-          backdropFilter: "blur(12px)",
+            "linear-gradient(180deg, rgba(11,16,32,0.95) 0%, rgba(11,16,32,0.6) 80%, transparent 100%)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
         }}
       >
         <div className="flex items-center gap-3">
@@ -113,18 +128,15 @@ export function ResultsScreen({ navigate }: ResultsScreenProps) {
             type="button"
             onClick={() => navigate("dates")}
             aria-label="Back"
-            className="
-              w-[60px] h-[60px] rounded-full shrink-0
-              flex items-center justify-center
-              bg-white/8 hover:bg-white/12 border border-white/10
-              focus:outline-none focus:ring-4 focus:ring-indigo-400/70 focus:ring-offset-2 focus:ring-offset-[#0B1020]
-            "
+            className="w-[60px] h-[60px] rounded-full shrink-0 flex items-center justify-center bg-white/8 hover:bg-white/12 border border-white/10 focus:outline-none focus:ring-4 focus:ring-indigo-300/70 focus:ring-offset-2 focus:ring-offset-[#0B1020] transition-colors"
           >
             <ArrowLeft size={26} color="#fff" strokeWidth={2.5} aria-hidden="true" />
           </button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-extrabold text-white">Available flights</h1>
-            <p className="text-sm text-slate-400 truncate">
+            <h1 className="text-white" style={type.h3}>
+              Available flights
+            </h1>
+            <p className="text-slate-400 truncate" style={type.bodySm}>
               {origin?.city} ({origin?.iata}) → {destination?.city} ({destination?.iata}) •{" "}
               {departureDate ? formatDateSpoken(departureDate) : "—"}
             </p>
@@ -133,71 +145,86 @@ export function ResultsScreen({ navigate }: ResultsScreenProps) {
             type="button"
             onClick={handleRefresh}
             aria-label="Refresh results"
-            className="
-              w-[60px] h-[60px] rounded-full shrink-0
-              flex items-center justify-center
-              bg-white/8 hover:bg-white/12 border border-white/10
-              focus:outline-none focus:ring-4 focus:ring-indigo-400/70
-            "
+            className="w-[60px] h-[60px] rounded-full shrink-0 flex items-center justify-center bg-white/8 hover:bg-white/12 border border-white/10 focus:outline-none focus:ring-4 focus:ring-indigo-300/70 transition-colors"
           >
-            <RefreshCw size={22} color="#fff" aria-hidden="true" />
+            <RefreshCw
+              size={22}
+              color="#fff"
+              className={loading ? "animate-spin" : ""}
+              aria-hidden="true"
+            />
           </button>
         </div>
       </div>
 
-      <div className="px-5 pt-4 space-y-4">
-        {/* Read all button */}
+      <div className="px-5 pt-5 space-y-4">
+        {/* Hero — Read all aloud */}
         {offers.length > 0 && (
-          <button
-            type="button"
+          <Button
             onClick={handleReadAll}
-            className="
-              w-full h-[60px] rounded-2xl
-              flex items-center justify-center gap-3
-              bg-indigo-500/15 hover:bg-indigo-500/25
-              border border-indigo-400/30
-              text-white font-semibold text-base
-              focus:outline-none focus:ring-4 focus:ring-indigo-400/70
-              active:scale-[0.98] transition-all
-            "
+            variant="secondary"
+            size="lg"
+            icon={<Volume2 size={20} />}
+            fullWidth
           >
-            <Volume2 size={22} aria-hidden="true" />
-            <span>Read all flights aloud</span>
-          </button>
+            Read all flights aloud
+          </Button>
         )}
 
         {/* Loading */}
         {loading && offers.length === 0 && (
-          <div className="text-center py-16">
-            <div className="inline-block w-10 h-10 border-3 border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin" aria-hidden="true" />
-            <p className="text-base text-slate-300 mt-4">Searching the best flights for you…</p>
+          <div className="text-center py-20">
+            <div
+              className="inline-block w-12 h-12 border-[3px] border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin"
+              aria-hidden="true"
+            />
+            <p className="text-slate-300 mt-5" style={type.bodyLg}>
+              Searching the best flights for you…
+            </p>
           </div>
         )}
 
         {/* Error */}
         {error && (
-          <div role="alert" className="p-4 rounded-2xl bg-red-500/15 border border-red-400/30 flex items-start gap-3">
-            <AlertCircle size={22} className="text-red-300 shrink-0 mt-0.5" aria-hidden="true" />
+          <div
+            role="alert"
+            className="p-5 rounded-2xl bg-red-500/10 border border-red-400/30 flex items-start gap-4"
+          >
+            <AlertCircle size={24} className="text-red-300 shrink-0 mt-0.5" aria-hidden="true" />
             <div className="flex-1">
-              <p className="text-base text-red-100 font-semibold">Search failed</p>
-              <p className="text-sm text-red-200/80 mt-0.5">{error}</p>
-              <button
-                type="button"
+              <p className="text-red-100" style={{ ...type.bodyLg, fontWeight: 700 }}>
+                Search failed
+              </p>
+              <p className="text-red-200/80 mt-1" style={type.bodySm}>
+                {error}
+              </p>
+              <Button
                 onClick={handleRefresh}
-                className="mt-3 px-4 py-2 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-100 text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-red-400/60"
+                variant="secondary"
+                size="md"
+                icon={<RefreshCw size={16} />}
+                className="mt-4"
               >
                 Try again
-              </button>
+              </Button>
             </div>
           </div>
         )}
 
         {/* Empty */}
         {!loading && !error && offers.length === 0 && (
-          <div className="text-center py-16">
-            <Plane size={48} className="text-slate-500 mx-auto mb-4" aria-hidden="true" />
-            <p className="text-lg text-white font-semibold">No flights found</p>
-            <p className="text-sm text-slate-400 mt-2 max-w-xs mx-auto">
+          <div className="text-center py-20">
+            <div
+              className="w-24 h-24 rounded-full mx-auto mb-6 flex items-center justify-center"
+              style={{ background: "rgba(255, 255, 255, 0.04)" }}
+              aria-hidden="true"
+            >
+              <Plane size={36} className="text-slate-500" />
+            </div>
+            <p className="text-white" style={{ ...type.h2, fontWeight: 700 }}>
+              No flights found
+            </p>
+            <p className="text-slate-400 mt-2 max-w-xs mx-auto" style={type.body}>
               Try a different date or airports.
             </p>
           </div>
@@ -213,7 +240,7 @@ export function ResultsScreen({ navigate }: ResultsScreenProps) {
               key={o.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.05 }}
+              transition={{ delay: idx * 0.05, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
             >
               <FlightOfferCard
                 offer={o}
@@ -253,23 +280,31 @@ function FlightOfferCard({
   onReadAloud,
 }: FlightOfferCardProps) {
   return (
-    <GlassCard
-      className={`p-5 ${isCheapest ? "ring-2 ring-emerald-400/40 border-emerald-400/40" : ""} ${isSelected ? "ring-2 ring-indigo-400/60" : ""}`}
-      selected={isSelected}
+    <Card
+      variant={isCheapest ? "success" : "default"}
+      padding="lg"
       onClick={onSelect}
+      selected={isSelected}
       ariaLabel={`${offer.airline} flight ${offer.flight_number}, ${formatTime(offer.departure_time)} to ${formatTime(offer.arrival_time)}, ${formatDuration(minutes)}, ${stopLabel(offer.stops)}, ${formatPrice(offer.price, offer.currency)}${isCheapest ? ". Cheapest option." : ""}`}
     >
-      <div className="flex items-start gap-3 mb-4">
+      <div className="flex items-start gap-3 mb-5">
         <div
-          className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
-          style={{ background: "linear-gradient(135deg,#4F46E5,#22C55E)" }}
+          className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+          style={{
+            background: isCheapest ? tokens.gradient.success : "rgba(255, 255, 255, 0.06)",
+            boxShadow: isCheapest ? "0 6px 18px rgba(34,197,94,0.32)" : "none",
+          }}
           aria-hidden="true"
         >
           <Plane size={20} color="#fff" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-base font-bold text-white truncate">{offer.airline}</p>
-          <p className="text-sm text-slate-400 truncate">Flight {offer.flight_number}</p>
+          <p className="text-white" style={{ ...type.bodyLg, fontWeight: 700 }}>
+            {offer.airline}
+          </p>
+          <p className="text-slate-400 truncate" style={type.bodySm}>
+            Flight {offer.flight_number}
+          </p>
         </div>
         {isCheapest && (
           <Badge color="green" icon={<Sparkles size={12} />}>
@@ -283,45 +318,57 @@ function FlightOfferCard({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-2 gap-4 mb-5">
         <div>
-          <p className="text-xs uppercase tracking-wider font-bold text-slate-400 mb-1">
+          <p className="text-slate-400 mb-1" style={type.eyebrow}>
             Departure
           </p>
-          <p className="text-2xl font-extrabold text-white">
+          <p
+            className="text-white"
+            style={{ ...type.h1, fontSize: "2.25rem", letterSpacing: "-0.025em", fontWeight: 800 }}
+          >
             {formatTime(offer.departure_time)}
           </p>
         </div>
         <div>
-          <p className="text-xs uppercase tracking-wider font-bold text-slate-400 mb-1">
+          <p className="text-slate-400 mb-1" style={type.eyebrow}>
             Arrival
           </p>
-          <p className="text-2xl font-extrabold text-white">
+          <p
+            className="text-white"
+            style={{ ...type.h1, fontSize: "2.25rem", letterSpacing: "-0.025em", fontWeight: 800 }}
+          >
             {formatTime(offer.arrival_time)}
           </p>
         </div>
       </div>
 
-      <div className="flex items-center gap-4 mb-4 text-sm text-slate-300">
+      <div className="flex items-center gap-4 mb-5 text-slate-300" style={type.bodySm}>
         <div className="flex items-center gap-1.5">
-          <Clock size={16} className="text-slate-400" aria-hidden="true" />
+          <Clock size={14} className="text-slate-400" aria-hidden="true" />
           <span>{formatDuration(minutes)}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <Plane size={16} className="text-slate-400" aria-hidden="true" />
+          <Plane size={14} className="text-slate-400" aria-hidden="true" />
           <span>{stopLabel(offer.stops)}</span>
         </div>
-        <div>
-          <span className="px-2 py-0.5 rounded-full bg-white/8 text-xs font-semibold text-slate-300">
-            {offer.cabin_class}
-          </span>
-        </div>
+        <span
+          className="px-2 py-0.5 rounded-full"
+          style={{ background: "rgba(255,255,255,0.06)", ...type.caption }}
+        >
+          {offer.cabin_class}
+        </span>
       </div>
 
-      <div className="flex items-center justify-between pt-4 border-t border-white/8">
+      <div className="flex items-center justify-between pt-5 border-t border-white/[0.06]">
         <div>
-          <p className="text-xs uppercase tracking-wider font-bold text-slate-400">Price</p>
-          <p className="text-3xl font-extrabold text-white">
+          <p className="text-slate-400" style={type.eyebrow}>
+            Price
+          </p>
+          <p
+            className="text-white"
+            style={{ ...type.h1, fontSize: "2rem", letterSpacing: "-0.02em" }}
+          >
             {formatPrice(offer.price, offer.currency)}
           </p>
         </div>
@@ -333,38 +380,23 @@ function FlightOfferCard({
               onReadAloud();
             }}
             aria-label="Read this flight aloud"
-            className="
-              w-[60px] h-[60px] rounded-full
-              flex items-center justify-center
-              bg-white/8 hover:bg-white/12 border border-white/10
-              focus:outline-none focus:ring-4 focus:ring-indigo-400/60
-            "
+            className="w-[60px] h-[60px] rounded-full flex items-center justify-center bg-white/8 hover:bg-white/12 border border-white/10 focus:outline-none focus:ring-4 focus:ring-indigo-300/60 transition-colors"
           >
-            <Volume2 size={22} color="#A5B4FC" aria-hidden="true" />
+            <Volume2 size={20} color="#A5B4FC" aria-hidden="true" />
           </button>
-          <button
-            type="button"
+          <Button
             onClick={(e) => {
               e.stopPropagation();
               onSelect();
             }}
-            className="
-              min-h-[60px] px-6 rounded-2xl
-              flex items-center justify-center gap-2
-              font-bold text-white text-base
-              focus:outline-none focus:ring-4 focus:ring-indigo-400/70 focus:ring-offset-2 focus:ring-offset-[#0B1020]
-              active:scale-[0.97] transition-all
-            "
-            style={{
-              background: "linear-gradient(135deg,#4F46E5,#6366f1)",
-              boxShadow: "0 8px 24px rgba(79,70,229,0.4)",
-            }}
+            size="md"
+            variant="primary"
+            icon={<Check size={16} strokeWidth={3} />}
           >
-            <span>Select</span>
-            <Check size={20} strokeWidth={3} aria-hidden="true" />
-          </button>
+            Select
+          </Button>
         </div>
       </div>
-    </GlassCard>
+    </Card>
   );
 }
