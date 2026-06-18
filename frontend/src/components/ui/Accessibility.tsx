@@ -16,7 +16,7 @@
  *    it without re-implementing.
  */
 import { ReactNode, useEffect, useRef } from "react";
-import { speak, stopSpeaking } from "../hooks/useSpeech";
+import { speak, stopSpeaking } from "../../hooks/useSpeech";
 
 interface SkipToContentProps {
   targetId?: string;

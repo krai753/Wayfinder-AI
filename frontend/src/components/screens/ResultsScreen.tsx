@@ -133,7 +133,7 @@ export function ResultsScreen({ navigate }: ResultsScreenProps) {
             <ArrowLeft size={26} color="#fff" strokeWidth={2.5} aria-hidden="true" />
           </button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-white" style={type.h3}>
+            <h1 className="text-white" style={type.h3 as any}>
               Available flights
             </h1>
             <p className="text-slate-400 truncate" style={type.bodySm as any}>
@@ -192,7 +192,7 @@ export function ResultsScreen({ navigate }: ResultsScreenProps) {
           >
             <AlertCircle size={24} className="text-red-300 shrink-0 mt-0.5" aria-hidden="true" />
             <div className="flex-1">
-              <p className="text-red-100" style={{ ...type.bodyLg as any, fontWeight: 700 }}>
+              <p className="text-red-100" style={{ ...type.bodyL as anyg as any, fontWeight: 700 }}>
                 Search failed
               </p>
               <p className="text-red-200/80 mt-1" style={type.bodySm as any}>
@@ -221,7 +221,7 @@ export function ResultsScreen({ navigate }: ResultsScreenProps) {
             >
               <Plane size={36} className="text-slate-500" />
             </div>
-            <p className="text-white" style={{ ...type.h2, fontWeight: 700 }}>
+            <p className="text-white" style={{ ...type.h as any2, fontWeight: 700 }}>
               No flights found
             </p>
             <p className="text-slate-400 mt-2 max-w-xs mx-auto" style={type.body as any}>
@@ -299,7 +299,7 @@ function FlightOfferCard({
           <Plane size={20} color="#fff" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-white" style={{ ...type.bodyLg as any, fontWeight: 700 }}>
+          <p className="text-white" style={{ ...type.bodyL as anyg as any, fontWeight: 700 }}>
             {offer.airline}
           </p>
           <p className="text-slate-400 truncate" style={type.bodySm as any}>
@@ -325,7 +325,7 @@ function FlightOfferCard({
           </p>
           <p
             className="text-white"
-            style={{ ...type.h1, fontSize: "2.25rem", letterSpacing: "-0.025em", fontWeight: 800 }}
+            style={{ ...type.h as any1, fontSize: "2.25rem", letterSpacing: "-0.025em", fontWeight: 800 }}
           >
             {formatTime(offer.departure_time)}
           </p>
@@ -336,7 +336,7 @@ function FlightOfferCard({
           </p>
           <p
             className="text-white"
-            style={{ ...type.h1, fontSize: "2.25rem", letterSpacing: "-0.025em", fontWeight: 800 }}
+            style={{ ...type.h as any1, fontSize: "2.25rem", letterSpacing: "-0.025em", fontWeight: 800 }}
           >
             {formatTime(offer.arrival_time)}
           </p>
@@ -354,7 +354,7 @@ function FlightOfferCard({
         </div>
         <span
           className="px-2 py-0.5 rounded-full"
-          style={{ background: "rgba(255,255,255,0.06)", ...type.caption }}
+          style={{ background: "rgba(255,255,255,0.06)", ...type.caption as any }}
         >
           {offer.cabin_class}
         </span>
@@ -367,7 +367,7 @@ function FlightOfferCard({
           </p>
           <p
             className="text-white"
-            style={{ ...type.h1, fontSize: "2rem", letterSpacing: "-0.02em" }}
+            style={{ ...type.h as any1, fontSize: "2rem", letterSpacing: "-0.02em" }}
           >
             {formatPrice(offer.price, offer.currency)}
           </p>
