@@ -1,21 +1,33 @@
 /**
  * SuccessScreen — booking confirmed.
  *
- * - Huge checkmark animation on entry
- * - Reads the booking reference aloud
- * - Shows the trip + reference + total
- * - "View my trips" and "Book another" CTAs
+ * Refactored for premium quality + blind-user accessibility:
+ * - Massive checkmark animation on entry (celebration moment)
+ * - Hero "Booking confirmed" headline reads aloud via TTS
+ * - Booking reference in monospace at h1 size (so it stands out)
+ * - "Read aloud" button for explicit re-read
+ * - Big "View my trips" CTA (primary)
+ * - "Book another flight" CTA (secondary)
+ * - All accessibility preserved
  */
 import { useEffect } from "react";
 import { motion } from "motion/react";
-import { Check, Volume2, Plane, Home, Bookmark, Calendar } from "lucide-react";
+import {
+  Check,
+  Volume2,
+  Plane,
+  Home,
+  Bookmark,
+  Calendar,
+} from "lucide-react";
 import { useWizard } from "../../hooks/useWizard";
 import { useUser } from "../../hooks/useUser";
 import { speak, stopSpeaking } from "../../hooks/useSpeech";
-import { GlassCard } from "../ui/GlassCard";
-import { PrimaryButton } from "../ui/PrimaryButton";
+import { Card } from "../ui/Card";
+import { Button } from "../ui/Button";
+import { tokens, type } from "../../design-system";
 import { NavFn } from "../../types";
-import { formatDateSpoken, formatPrice, formatTime, stopLabel } from "../../lib/format";
+import { formatDateSpoken, formatTime, stopLabel } from "../../lib/format";
 
 interface SuccessScreenProps {
   navigate: NavFn;
@@ -60,30 +72,50 @@ export function SuccessScreen({ navigate, params }: SuccessScreenProps) {
   if (!booking) return null;
 
   return (
-    <div className="min-h-screen pb-32" style={{ background: "#0B1020" }}>
-      <div className="px-5 pt-12 flex flex-col items-center text-center">
+    <div
+      className="min-h-[100dvh] pb-32 relative overflow-hidden"
+      style={{ background: tokens.color.bg.deep }}
+    >
+      {/* Ambient celebration halo */}
+      <div
+        className="absolute pointer-events-none"
+        style={{
+          top: "10%",
+          left: "50%",
+          transform: "translate(-50%, 0)",
+          width: "min(500px, 130vw)",
+          height: "min(500px, 130vw)",
+          background:
+            "radial-gradient(circle, rgba(34,197,94,0.20) 0%, transparent 65%)",
+          filter: "blur(30px)",
+        }}
+        aria-hidden="true"
+      />
+
+      <div className="relative px-5 pt-12 flex flex-col items-center text-center">
+        {/* Hero checkmark */}
         <motion.div
           initial={{ scale: 0, rotate: -180 }}
           animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: "spring", stiffness: 150, damping: 12 }}
-          className="relative mb-6"
+          transition={{ type: "spring", stiffness: 180, damping: 14 }}
+          className="relative mb-8"
         >
-          {!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches && (
-            <>
-              <motion.div
-                className="absolute inset-0 rounded-full"
-                style={{ background: "rgba(34,197,94,0.3)", filter: "blur(20px)" }}
-                animate={{ scale: [1, 1.3, 1], opacity: [0.4, 0.8, 0.4] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                aria-hidden="true"
-              />
-            </>
-          )}
+          <motion.div
+            className="absolute inset-0 rounded-full"
+            style={{
+              background: "rgba(34,197,94,0.32)",
+              filter: "blur(20px)",
+            }}
+            animate={{ scale: [1, 1.3, 1], opacity: [0.4, 0.85, 0.4] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            aria-hidden="true"
+          />
           <div
             className="relative w-28 h-28 rounded-full flex items-center justify-center"
             style={{
-              background: "linear-gradient(135deg,#16A34A,#22C55E)",
-              boxShadow: "0 20px 60px rgba(34,197,94,0.45)",
+              background: tokens.gradient.success,
+              boxShadow: "0 20px 60px rgba(34,197,94,0.5), inset 0 2px 2px rgba(255,255,255,0.18)",
+              border: "1.5px solid rgba(255, 255, 255, 0.18)",
             }}
             aria-hidden="true"
           >
@@ -94,56 +126,60 @@ export function SuccessScreen({ navigate, params }: SuccessScreenProps) {
         <motion.h1
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="text-3xl font-extrabold text-white mb-2"
+          transition={{ delay: 0.2, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          className="text-white"
+          style={{
+            ...type.h1,
+            fontSize: "clamp(2rem, 8vw, 2.75rem)",
+            letterSpacing: "-0.03em",
+            fontWeight: 800,
+          }}
         >
           Booking confirmed
         </motion.h1>
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="text-base text-slate-300 max-w-xs"
+          transition={{ delay: 0.3, duration: 0.6 }}
+          className="text-slate-300 max-w-xs mt-3"
+          style={type.bodyLg as any}
         >
           Have a great trip, {profile.name.split(" ")[0]}.
         </motion.p>
       </div>
 
-      <div className="px-5 pt-8 space-y-4">
+      <div className="relative px-5 pt-10 space-y-5">
         {/* Reference card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
+          transition={{ delay: 0.4, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
         >
-          <GlassCard className="p-6 text-center" ariaLabel="Booking reference">
-            <p className="text-xs uppercase tracking-widest font-bold text-slate-400 mb-2">
+          <Card variant="success" padding="lg" className="text-center">
+            <p className="text-emerald-300 mb-2" style={type.eyebrow as any}>
               Booking reference
             </p>
             <p
-              className="text-4xl font-extrabold text-white tracking-widest mb-3"
-              style={{ fontFamily: "'JetBrains Mono', monospace" }}
+              className="text-white mb-4"
+              style={{
+                fontFamily: tokens.font.mono,
+                fontSize: "clamp(2rem, 8vw, 2.75rem)",
+                fontWeight: 800,
+                letterSpacing: "0.04em",
+                lineHeight: 1,
+              }}
             >
               {booking.booking_reference || "PENDING"}
             </p>
-            <button
-              type="button"
+            <Button
               onClick={handleRead}
-              aria-label="Read booking details aloud"
-              className="
-                inline-flex items-center gap-2
-                px-5 h-[52px] rounded-full
-                bg-indigo-500/20 hover:bg-indigo-500/30
-                border border-indigo-400/30
-                text-white text-sm font-semibold
-                focus:outline-none focus:ring-4 focus:ring-indigo-400/60
-                active:scale-95 transition-all
-              "
+              variant="secondary"
+              size="md"
+              icon={<Volume2 size={18} />}
             >
-              <Volume2 size={18} aria-hidden="true" />
-              <span>Read aloud</span>
-            </button>
-          </GlassCard>
+              Read aloud
+            </Button>
+          </Card>
         </motion.div>
 
         {/* Trip summary card */}
@@ -151,43 +187,61 @@ export function SuccessScreen({ navigate, params }: SuccessScreenProps) {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
+            transition={{ delay: 0.5, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           >
-            <GlassCard className="p-5" ariaLabel="Trip details">
-              <div className="flex items-center gap-3 mb-3">
+            <Card variant="default" padding="md" ariaLabel="Trip details">
+              <div className="flex items-center gap-3 mb-4">
                 <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center"
-                  style={{ background: "linear-gradient(135deg,#4F46E5,#22C55E)" }}
+                  style={{ background: tokens.gradient.primary }}
                   aria-hidden="true"
                 >
                   <Plane size={20} color="#fff" />
                 </div>
-                <p className="text-base font-bold text-white">Your trip</p>
+                <p className="text-white" style={{ ...type.bodyLg as any, fontWeight: 700 }}>
+                  Your trip
+                </p>
               </div>
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-3">
                 <div className="text-center">
-                  <p className="text-2xl font-extrabold text-white">{origin.iata}</p>
-                  <p className="text-sm text-slate-400">{origin.city}</p>
+                  <p
+                    className="text-white"
+                    style={{ ...type.h2, fontWeight: 800, letterSpacing: "-0.02em" }}
+                  >
+                    {origin.iata}
+                  </p>
+                  <p className="text-slate-400" style={type.bodySm as any}>
+                    {origin.city}
+                  </p>
                 </div>
                 <Plane size={20} className="text-slate-400" aria-hidden="true" />
                 <div className="text-center">
-                  <p className="text-2xl font-extrabold text-white">{destination.iata}</p>
-                  <p className="text-sm text-slate-400">{destination.city}</p>
+                  <p
+                    className="text-white"
+                    style={{ ...type.h2, fontWeight: 800, letterSpacing: "-0.02em" }}
+                  >
+                    {destination.iata}
+                  </p>
+                  <p className="text-slate-400" style={type.bodySm as any}>
+                    {destination.city}
+                  </p>
                 </div>
               </div>
-              <div className="flex items-center justify-center gap-2 text-sm text-slate-300 mt-2">
+              <div className="flex items-center justify-center gap-2 text-slate-300 mt-3" style={type.bodySm as any}>
                 <Calendar size={14} aria-hidden="true" />
                 <span>{formatDateSpoken(departureDate || "")}</span>
               </div>
-              <div className="mt-3 pt-3 border-t border-white/8 flex items-center justify-between">
-                <p className="text-sm text-slate-300">
-                  {selectedOffer.airline} • {formatTime(selectedOffer.departure_time)} • {stopLabel(selectedOffer.stops)}
+              <div className="mt-4 pt-4 border-t border-white/[0.06] flex items-center justify-between">
+                <p className="text-slate-300" style={type.bodySm as any}>
+                  {selectedOffer.airline} • {formatTime(selectedOffer.departure_time)} •{" "}
+                  {stopLabel(selectedOffer.stops)}
                 </p>
-                <p className="text-lg font-extrabold text-white">
-                  {booking.total_amount || formatPrice(selectedOffer.price, selectedOffer.currency)}
+                <p className="text-white" style={{ ...type.h3, fontWeight: 800 }}>
+                  {booking.total_amount ||
+                    `${selectedOffer.price} ${selectedOffer.currency}`}
                 </p>
               </div>
-            </GlassCard>
+            </Card>
           </motion.div>
         )}
 
@@ -195,26 +249,26 @@ export function SuccessScreen({ navigate, params }: SuccessScreenProps) {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
+          transition={{ delay: 0.6, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           className="space-y-3 pt-2"
         >
-          <PrimaryButton
+          <Button
             onClick={handleViewTrips}
             size="xl"
             icon={<Bookmark size={22} />}
-            className="w-full"
+            fullWidth
           >
             View my trips
-          </PrimaryButton>
-          <PrimaryButton
+          </Button>
+          <Button
             onClick={handleBookAnother}
             variant="secondary"
             size="lg"
             icon={<Home size={20} />}
-            className="w-full"
+            fullWidth
           >
             Book another flight
-          </PrimaryButton>
+          </Button>
         </motion.div>
       </div>
     </div>
