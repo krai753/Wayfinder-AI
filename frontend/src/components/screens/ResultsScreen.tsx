@@ -136,7 +136,7 @@ export function ResultsScreen({ navigate }: ResultsScreenProps) {
             <h1 className="text-white" style={type.h3}>
               Available flights
             </h1>
-            <p className="text-slate-400 truncate" style={type.bodySm}>
+            <p className="text-slate-400 truncate" style={type.bodySm as any}>
               {origin?.city} ({origin?.iata}) → {destination?.city} ({destination?.iata}) •{" "}
               {departureDate ? formatDateSpoken(departureDate) : "—"}
             </p>
@@ -178,7 +178,7 @@ export function ResultsScreen({ navigate }: ResultsScreenProps) {
               className="inline-block w-12 h-12 border-[3px] border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin"
               aria-hidden="true"
             />
-            <p className="text-slate-300 mt-5" style={type.bodyLg}>
+            <p className="text-slate-300 mt-5" style={type.bodyLg as any}>
               Searching the best flights for you…
             </p>
           </div>
@@ -192,10 +192,10 @@ export function ResultsScreen({ navigate }: ResultsScreenProps) {
           >
             <AlertCircle size={24} className="text-red-300 shrink-0 mt-0.5" aria-hidden="true" />
             <div className="flex-1">
-              <p className="text-red-100" style={{ ...type.bodyLg, fontWeight: 700 }}>
+              <p className="text-red-100" style={{ ...type.bodyLg as any, fontWeight: 700 }}>
                 Search failed
               </p>
-              <p className="text-red-200/80 mt-1" style={type.bodySm}>
+              <p className="text-red-200/80 mt-1" style={type.bodySm as any}>
                 {error}
               </p>
               <Button
@@ -224,7 +224,7 @@ export function ResultsScreen({ navigate }: ResultsScreenProps) {
             <p className="text-white" style={{ ...type.h2, fontWeight: 700 }}>
               No flights found
             </p>
-            <p className="text-slate-400 mt-2 max-w-xs mx-auto" style={type.body}>
+            <p className="text-slate-400 mt-2 max-w-xs mx-auto" style={type.body as any}>
               Try a different date or airports.
             </p>
           </div>
@@ -299,10 +299,10 @@ function FlightOfferCard({
           <Plane size={20} color="#fff" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-white" style={{ ...type.bodyLg, fontWeight: 700 }}>
+          <p className="text-white" style={{ ...type.bodyLg as any, fontWeight: 700 }}>
             {offer.airline}
           </p>
-          <p className="text-slate-400 truncate" style={type.bodySm}>
+          <p className="text-slate-400 truncate" style={type.bodySm as any}>
             Flight {offer.flight_number}
           </p>
         </div>
@@ -320,7 +320,7 @@ function FlightOfferCard({
 
       <div className="grid grid-cols-2 gap-4 mb-5">
         <div>
-          <p className="text-slate-400 mb-1" style={type.eyebrow}>
+          <p className="text-slate-400 mb-1" style={type.eyebrow as any}>
             Departure
           </p>
           <p
@@ -331,7 +331,7 @@ function FlightOfferCard({
           </p>
         </div>
         <div>
-          <p className="text-slate-400 mb-1" style={type.eyebrow}>
+          <p className="text-slate-400 mb-1" style={type.eyebrow as any}>
             Arrival
           </p>
           <p
@@ -343,7 +343,7 @@ function FlightOfferCard({
         </div>
       </div>
 
-      <div className="flex items-center gap-4 mb-5 text-slate-300" style={type.bodySm}>
+      <div className="flex items-center gap-4 mb-5 text-slate-300" style={type.bodySm as any}>
         <div className="flex items-center gap-1.5">
           <Clock size={14} className="text-slate-400" aria-hidden="true" />
           <span>{formatDuration(minutes)}</span>
@@ -362,7 +362,7 @@ function FlightOfferCard({
 
       <div className="flex items-center justify-between pt-5 border-t border-white/[0.06]">
         <div>
-          <p className="text-slate-400" style={type.eyebrow}>
+          <p className="text-slate-400" style={type.eyebrow as any}>
             Price
           </p>
           <p
