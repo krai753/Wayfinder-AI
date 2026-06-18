@@ -26,10 +26,11 @@ import {
   Bookmark,
 } from "lucide-react";
 import { useLocation } from "../../hooks/useLocation";
-import { useScreenHelp, speak, stopSpeaking } from "../../hooks/useSpeech";
+import { useScreenHelp } from "../../hooks/useScreenHelp";
+import { speak, stopSpeaking } from "../../hooks/useSpeech";
 import { haptic } from "../../lib/haptics";
 import { tokens, type, zIndex } from "../../design-system";
-import { Screen, NavFn } from "../../types";
+import { NavFn } from "../../types";
 
 interface PersistentHelpButtonProps {
   navigate: NavFn;
@@ -37,7 +38,12 @@ interface PersistentHelpButtonProps {
   primaryAction?: string;
 }
 
-const QUICK_ACTIONS: { label: string; speak: string; action: (n: NavFn) => void; icon: typeof Home }[] = [
+const QUICK_ACTIONS: {
+  label: string;
+  speak: string;
+  action: (n: NavFn) => void;
+  icon: typeof Home;
+}[] = [
   {
     label: "Go home",
     speak: "Going home",
@@ -77,27 +83,23 @@ export function PersistentHelpButton({
     haptic.tap();
     setOpen((o) => !o);
     if (!open) {
-      // Read full help on first open
       const text = help.getFullHelp();
       speak({ text });
     }
   }
 
-  function handleQuickAction(action: (n: NavFn) => void, speakText: string) {
+  function handleQuickAction(
+    action: (n: NavFn) => void,
+    speakText: string
+  ) {
     haptic.tap();
     setOpen(false);
     speak({ text: speakText });
     action(navigate);
   }
 
-  function handleClose() {
-    haptic.tap();
-    setOpen(false);
-  }
-
   return (
     <>
-      {/* Help button — bottom-right corner, always visible */}
       <motion.button
         type="button"
         onClick={handleHelpTap}
@@ -108,19 +110,29 @@ export function PersistentHelpButton({
         className="fixed bottom-24 right-4 w-[60px] h-[60px] rounded-full z-40 flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-indigo-300/70"
         style={{
           background: "rgba(99, 102, 241, 0.85)",
-          boxShadow: "0 10px 30px rgba(99,102,241,0.45), 0 4px 12px rgba(0,0,0,0.32)",
+          boxShadow:
+            "0 10px 30px rgba(99,102,241,0.45), 0 4px 12px rgba(0,0,0,0.32)",
           border: "1.5px solid rgba(255,255,255,0.18)",
           zIndex: zIndex.raised,
         }}
       >
         {open ? (
-          <X size={26} color="#fff" strokeWidth={2.5} aria-hidden="true" />
+          <X
+            size={26}
+            color="#fff"
+            strokeWidth={2.5}
+            aria-hidden="true"
+          />
         ) : (
-          <HelpCircle size={26} color="#fff" strokeWidth={2.5} aria-hidden="true" />
+          <HelpCircle
+            size={26}
+            color="#fff"
+            strokeWidth={2.5}
+            aria-hidden="true"
+          />
         )}
       </motion.button>
 
-      {/* Popover */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -151,7 +163,10 @@ export function PersistentHelpButton({
                   padding: "16px 20px",
                 }}
               >
-                <p className="text-indigo-300 mb-1" style={type.eyebrow}>
+                <p
+                  className="text-indigo-300 mb-1"
+                  style={type.eyebrow}
+                >
                   Help
                 </p>
                 <p
@@ -160,7 +175,10 @@ export function PersistentHelpButton({
                 >
                   {help.title}
                 </p>
-                <p className="text-slate-300 mt-2" style={type.bodySm}>
+                <p
+                  className="text-slate-300 mt-2"
+                  style={type.bodySm as any}
+                >
                   {help.subtitle}
                 </p>
               </div>
@@ -172,13 +190,22 @@ export function PersistentHelpButton({
                   padding: "12px 20px",
                 }}
               >
-                <p className="text-slate-400 mb-1" style={type.eyebrow}>
+                <p
+                  className="text-slate-400 mb-1"
+                  style={type.eyebrow}
+                >
                   What to do
                 </p>
-                <p className="text-white" style={type.bodyLg as any}>
+                <p
+                  className="text-white"
+                  style={type.bodyLg as any}
+                >
                   {primaryAction || help.primaryAction}
                 </p>
-                <p className="text-slate-400 mt-2" style={type.bodySm}>
+                <p
+                  className="text-slate-400 mt-2"
+                  style={type.bodySm as any}
+                >
                   Or say: "{help.voiceCommand}"
                 </p>
               </div>
@@ -190,7 +217,10 @@ export function PersistentHelpButton({
                   padding: "12px 20px",
                 }}
               >
-                <p className="text-slate-400 mb-2" style={type.eyebrow}>
+                <p
+                  className="text-slate-400 mb-2"
+                  style={type.eyebrow}
+                >
                   Quick actions
                 </p>
                 <div className="grid grid-cols-2 gap-2">
@@ -200,12 +230,20 @@ export function PersistentHelpButton({
                       <button
                         key={a.label}
                         type="button"
-                        onClick={() => handleQuickAction(a.action, a.speak)}
+                        onClick={() =>
+                          handleQuickAction(a.action, a.speak)
+                        }
                         className="flex items-center gap-2 min-h-[52px] rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] px-3 focus:outline-none focus:ring-4 focus:ring-indigo-300/60 transition-colors"
                         style={type.bodySm as any}
                       >
-                        <Icon size={16} className="text-indigo-300 shrink-0" aria-hidden="true" />
-                        <span className="text-white font-semibold">{a.label}</span>
+                        <Icon
+                          size={16}
+                          className="text-indigo-300 shrink-0"
+                          aria-hidden="true"
+                        />
+                        <span className="text-white font-semibold">
+                          {a.label}
+                        </span>
                       </button>
                     );
                   })}
