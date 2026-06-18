@@ -238,7 +238,7 @@ export function PassengerScreen({ navigate }: PassengerScreenProps) {
                 placeholder="Full name as on passport"
                 autoComplete="name"
                 className="flex-1 h-[60px] px-3 bg-transparent border-0 text-white placeholder:text-slate-500 focus:outline-none focus:ring-0"
-                style={{ ...type.bodyLg }}
+                style={type.bodyLg as any}
               />
               <button
                 type="button"
