@@ -68,51 +68,6 @@ const SCREEN_LABEL: Record<Screen, string> = {
   portfolio: "Travel stats",
 };
 
-const SCREEN_LABEL: Record<Screen, string> = {
-  splash: "Splash screen",
-  onboard1: "Onboarding, part 1",
-  onboard2: "Onboarding, part 2",
-  onboard3: "Onboarding, part 3",
-  home: "Home",
-  voice: "Voice assistant",
-  origin: "Choose departure airport",
-  destination: "Choose arrival airport",
-  dates: "Choose departure date",
-  loading: "Loading",
-  results: "Available flights",
-  flightDetail: "Flight details",
-  passenger: "Passenger details",
-  accessibility: "Accessibility",
-  review: "Review your trip",
-  payment: "Payment",
-  success: "Booking confirmed",
-  bookings: "My trips",
-  tripDetail: "Trip details",
-  assistant: "AI assistant",
-  profile: "Profile",
-  settingsScreen: "Settings",
-  portfolio: "Travel stats",
-};
-import { SplashScreen } from "../components/screens/SplashScreen";
-import { HomeScreen } from "../components/screens/HomeScreen";
-import { VoiceScreen } from "../components/screens/VoiceScreen";
-import { AirportInput } from "../components/screens/AirportInput";
-import { DatePickerScreen } from "../components/screens/DatePickerScreen";
-import { ResultsScreen } from "../components/screens/ResultsScreen";
-import { FlightDetailScreen } from "../components/screens/FlightDetailScreen";
-import { PassengerScreen } from "../components/screens/PassengerScreen";
-import { AccessibilityScreen } from "../components/screens/AccessibilityScreen";
-import { ReviewScreen } from "../components/screens/ReviewScreen";
-import { SuccessScreen } from "../components/screens/SuccessScreen";
-import { TripsScreen } from "../components/screens/TripsScreen";
-import { TripDetailScreen } from "../components/screens/TripDetailScreen";
-import { PortfolioScreen } from "../components/screens/PortfolioScreen";
-import { AssistantScreen } from "../components/screens/AssistantScreen";
-import { ProfileScreen } from "../components/screens/ProfileScreen";
-import { SettingsScreen } from "../components/screens/SettingsScreen";
-import { LoadingScreen } from "../components/screens/LoadingScreen";
-import { OnboardingScreen } from "../components/screens/OnboardingScreen";
-
 function AppInner() {
   const [screen, setScreen] = useState<Screen>("splash");
   const [params, setParams] = useState<Record<string, any> | undefined>(undefined);
