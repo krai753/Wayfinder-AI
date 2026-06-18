@@ -133,7 +133,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
             ? "0 1px 1px rgba(0,0,0,0.32)"
             : "none",
       }}
-      {...rest}
+      {...(rest as any)}
     >
       {/* Inner core — the actual content surface, with the
           Doppelrand inset highlight + smaller radius for concentric

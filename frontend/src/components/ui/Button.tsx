@@ -27,7 +27,7 @@ import { tokens, type } from "../../design-system";
 type Variant = "primary" | "secondary" | "ghost" | "danger" | "success";
 type Size = "sm" | "md" | "lg" | "xl" | "hero";
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "ref"> {
   variant?: Variant;
   size?: Size;
   loading?: boolean;
@@ -38,7 +38,9 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   fullWidth?: boolean;
 }
 
-const SIZE: Record<Size, { h: string; px: string; py: string; text: typeof type.body | typeof type.bodyLg; radius: string; iconSize: number }> = {
+type TypeStyle = { size: string; line: string; weight: string; tracking: string };
+
+const SIZE: Record<Size, { h: string; px: string; py: string; text: TypeStyle; radius: string; iconSize: number }> = {
   sm:    { h: "min-h-[44px] h-[44px]",    px: "px-4", py: "py-2", text: type.label,   radius: tokens.radius.lg,   iconSize: 16 },
   md:    { h: "min-h-[52px] h-[52px]",    px: "px-5", py: "py-2.5", text: type.bodySm, radius: tokens.radius.xl,  iconSize: 18 },
   lg:    { h: "min-h-[60px] h-[60px]",    px: "px-6", py: "py-3.5", text: type.body,  radius: tokens.radius["2xl"], iconSize: 20 },
@@ -138,7 +140,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         backdropFilter: variant === "secondary" ? "blur(12px)" : undefined,
         WebkitBackdropFilter: variant === "secondary" ? "blur(12px)" : undefined,
       }}
-      {...rest}
+      {...(rest as any)}
     >
       {/* Loading spinner */}
       {loading && (
