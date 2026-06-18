@@ -24,11 +24,9 @@ import {
   Volume2,
   VolumeX,
   Bookmark,
-  Phone,
 } from "lucide-react";
-import { useLocation } from "../hooks/useLocation";
-import { useScreenHelp, speak, stopSpeaking } from "../hooks/useSpeech";
-import { useWizard } from "../hooks/useWizard";
+import { useLocation } from "../../hooks/useLocation";
+import { useScreenHelp, speak, stopSpeaking } from "../../hooks/useSpeech";
 import { haptic } from "../../lib/haptics";
 import { tokens, type, zIndex } from "../../design-system";
 import { Screen, NavFn } from "../../types";

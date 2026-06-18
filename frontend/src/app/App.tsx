@@ -18,7 +18,6 @@ import { speak, stopSpeaking } from "../hooks/useSpeech";
 import { BottomNav } from "../components/ui/BottomNav";
 import { SkipToContent } from "../components/ui/Accessibility";
 import { tokens } from "../design-system";
-import { PersistentHelpButton } from "../components/ui/PersistentHelpButton";
 
 const LazyPersistentHelpButton = lazy(() =>
   import("../components/ui/PersistentHelpButton").then((m) => ({ default: m.PersistentHelpButton }))
