@@ -325,7 +325,7 @@ function FlightOfferCard({
           </p>
           <p
             className="text-white"
-            style={{ ...type.h as any1, fontSize: "2.25rem", letterSpacing: "-0.025em", fontWeight: 800 }}
+            style={{ ...type.h1 as any, fontSize: "2.25rem", letterSpacing: "-0.025em", fontWeight: 800 }}
           >
             {formatTime(offer.departure_time)}
           </p>
@@ -336,7 +336,7 @@ function FlightOfferCard({
           </p>
           <p
             className="text-white"
-            style={{ ...type.h as any1, fontSize: "2.25rem", letterSpacing: "-0.025em", fontWeight: 800 }}
+            style={{ ...type.h1 as any, fontSize: "2.25rem", letterSpacing: "-0.025em", fontWeight: 800 }}
           >
             {formatTime(offer.arrival_time)}
           </p>
@@ -367,7 +367,7 @@ function FlightOfferCard({
           </p>
           <p
             className="text-white"
-            style={{ ...type.h as any1, fontSize: "2rem", letterSpacing: "-0.02em" }}
+            style={{ ...type.h1 as any, fontSize: "2rem", letterSpacing: "-0.02em" }}
           >
             {formatPrice(offer.price, offer.currency)}
           </p>
