@@ -148,7 +148,7 @@ export function SettingsScreen({ navigate }: SettingsScreenProps) {
                 <label
                   htmlFor="rate"
                   className="text-white"
-                  style={type.label}
+                  style={type.label as any}
                 >
                   Speech rate
                 </label>
@@ -194,7 +194,7 @@ export function SettingsScreen({ navigate }: SettingsScreenProps) {
                 <label
                   htmlFor="pitch"
                   className="text-white"
-                  style={type.label}
+                  style={type.label as any}
                 >
                   Pitch
                 </label>
