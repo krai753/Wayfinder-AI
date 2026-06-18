@@ -27,7 +27,7 @@ import { tokens, type } from "../../design-system";
 type Variant = "primary" | "secondary" | "ghost" | "danger" | "success";
 type Size = "sm" | "md" | "lg" | "xl" | "hero";
 
-interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "ref"> {
+export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "ref"> {
   variant?: Variant;
   size?: Size;
   loading?: boolean;

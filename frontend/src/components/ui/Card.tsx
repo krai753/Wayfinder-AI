@@ -24,7 +24,7 @@ import { tokens } from "../../design-system";
 type Variant = "default" | "tinted" | "success" | "danger" | "raised";
 type Padding = "sm" | "md" | "lg" | "xl" | "none";
 
-interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, "onClick"> {
+export interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, "onClick"> {
   children: ReactNode;
   variant?: Variant;
   padding?: Padding;
