@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Mic, MicOff, X, ArrowRight, ArrowLeft, Search, MapPin,
@@ -12,18 +12,47 @@ import {
   RefreshCw, Coffee, Accessibility, Heart, Info
 } from "lucide-react";
 
-type Screen =
-  | "splash" | "onboard1" | "onboard2" | "onboard3"
-  | "home" | "voice" | "origin" | "destination" | "dates"
-  | "loading" | "results" | "flightDetail" | "passenger"
-  | "accessibility" | "review" | "payment" | "success"
-  | "bookings" | "tripDetail" | "assistant" | "profile" | "settingsScreen";
+// Screens
+import VoiceScreen from "../components/screens/VoiceScreen";
+import ResultsScreen from "../components/screens/ResultsScreen";
+import PassengerScreen from "../components/screens/PassengerScreen";
+import ConfirmScreen from "../components/screens/ConfirmScreen";
+import SuccessScreen from "../components/screens/SuccessScreen";
+import TripsScreen from "../components/screens/TripsScreen";
+import TripDetailScreen from "../components/screens/TripDetailScreen";
+import CancelScreen from "../components/screens/CancelScreen";
+import RescheduleScreen from "../components/screens/RescheduleScreen";
+import PortfolioScreen from "../components/screens/PortfolioScreen";
 
-const SCREENS: Screen[] = [
-  "splash","onboard1","onboard2","onboard3","home","voice","origin","destination",
-  "dates","loading","results","flightDetail","passenger","accessibility","review",
-  "payment","success","bookings","tripDetail","assistant","profile","settingsScreen"
-];
+import type { FlightOffer, BookingResult } from "../types";
+
+// ── SCREEN TYPES ────────────────────────────────────────────────
+
+type Screen =
+  | "splash" | "home"
+  | "voice" | "results" | "passenger" | "confirm" | "success"
+  | "bookings" | "tripDetail" | "cancel" | "reschedule" | "portfolio"
+  | "profile";
+
+// ── SHARED SCREEN STATE ─────────────────────────────────────────
+
+interface ScreenState {
+  sessionId: string;
+  offers: FlightOffer[];
+  selectedFlight: FlightOffer | null;
+  searchOrigin: string;
+  searchDestination: string;
+  searchDate: string;
+  passengerName: string;
+  passengerAssistance: string;
+  bookingResult: BookingResult | null;
+  selectedBooking: BookingResult | null;
+  rescheduleBookingId: string;
+  rescheduleCurrentDate: string;
+  cancelBookingId: string;
+}
+
+// ── UI COMPONENTS ───────────────────────────────────────────────
 
 function GlassCard({ children, className = "", onClick }: { children: React.ReactNode; className?: string; onClick?: () => void }) {
   return (
@@ -106,14 +135,12 @@ function MicButton({ size = "lg", active = false, onClick }: { size?: "sm" | "md
       whileTap={{ scale: 0.92 }}
     >
       {active && (
-        <>
-          <motion.div
-            className="absolute inset-0 rounded-full"
-            style={{ background: "rgba(79,70,229,0.15)" }}
-            animate={{ scale: [1, 1.3, 1] }}
-            transition={{ duration: 1.5, repeat: Infinity }}
-          />
-        </>
+        <motion.div
+          className="absolute inset-0 rounded-full"
+          style={{ background: "rgba(79,70,229,0.15)" }}
+          animate={{ scale: [1, 1.3, 1] }}
+          transition={{ duration: 1.5, repeat: Infinity }}
+        />
       )}
       <div
         className="relative w-full h-full rounded-full flex items-center justify-center"
@@ -133,11 +160,11 @@ function BottomNav({ current, navigate }: { current: Screen; navigate: (s: Scree
   const tabs: { screen: Screen; icon: React.ReactNode; label: string }[] = [
     { screen: "home", icon: <Home size={22} />, label: "Home" },
     { screen: "bookings", icon: <Bookmark size={22} />, label: "Trips" },
-    { screen: "assistant", icon: <MessageSquare size={22} />, label: "AI" },
-    { screen: "profile", icon: <User size={22} />, label: "Profile" },
+    { screen: "voice", icon: <MessageSquare size={22} />, label: "AI" },
+    { screen: "portfolio", icon: <User size={22} />, label: "Profile" },
   ];
-  const mainScreens: Screen[] = ["home","bookings","assistant","profile","settingsScreen","tripDetail","voice","origin","destination","dates","loading","results","flightDetail","passenger","accessibility","review","payment","success"];
-  if (!mainScreens.includes(current)) return null;
+  const showNav = ["home", "voice", "bookings", "portfolio", "results", "passenger"].includes(current);
+  if (!showNav) return null;
 
   return (
     <div
@@ -242,7 +269,6 @@ function HomeScreen({ navigate }: { navigate: (s: Screen) => void }) {
   return (
     <div className="min-h-screen pb-28" style={{ background: "#0B1020" }}>
       <div className="px-5 pt-14 pb-8">
-        {/* Backend status badge */}
         <div className="flex items-center justify-end mb-4">
           <div className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium"
             style={{
@@ -262,22 +288,16 @@ function HomeScreen({ navigate }: { navigate: (s: Screen) => void }) {
         </div>
         <div className="mb-6">
           <p className="text-sm text-[#94A3B8] mb-0.5">Good morning,</p>
-          <h1 className="text-2xl font-extrabold text-white">Priya Sharma</h1>
+          <h1 className="text-2xl font-extrabold text-white">Wayfinder AI</h1>
         </div>
 
         <GlassCard className="p-6 text-center" onClick={() => navigate("voice")}>
           <p className="text-sm text-[#94A3B8] mb-5">Tap to start voice booking</p>
           <div className="flex justify-center mb-5">
-            <MicButton
-              size="lg"
-              active={micActive}
-              onClick={(e) => { e?.stopPropagation(); setMicActive(!micActive); }}
-            />
+            <MicButton size="lg" active={micActive} />
           </div>
-          <VoiceWave active={micActive} size="md" />
-          <p className="text-base font-semibold text-white mt-4">
-            {micActive ? "Listening..." : "Start Flight Booking"}
-          </p>
+          <VoiceWave active={false} size="md" />
+          <p className="text-base font-semibold text-white mt-4">Start Flight Booking</p>
         </GlassCard>
       </div>
 
@@ -285,17 +305,18 @@ function HomeScreen({ navigate }: { navigate: (s: Screen) => void }) {
         <div>
           <h2 className="text-sm font-semibold text-[#94A3B8] uppercase mb-3">Quick Actions</h2>
           <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: "Book Flight", icon: <Plane size={20} /> },
-              { label: "My Trips", icon: <Bookmark size={20} /> },
-            ].map((a) => (
-              <GlassCard key={a.label} className="p-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "rgba(79,70,229,0.2)" }}>
-                  <span style={{ color: "#4F46E5" }}>{a.icon}</span>
-                </div>
-                <span className="text-sm font-semibold text-white">{a.label}</span>
-              </GlassCard>
-            ))}
+            <GlassCard className="p-4 flex items-center gap-3" onClick={() => navigate("voice")}>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "rgba(79,70,229,0.2)" }}>
+                <span style={{ color: "#4F46E5" }}><Plane size={20} /></span>
+              </div>
+              <span className="text-sm font-semibold text-white">Book Flight</span>
+            </GlassCard>
+            <GlassCard className="p-4 flex items-center gap-3" onClick={() => navigate("bookings")}>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "rgba(79,70,229,0.2)" }}>
+                <span style={{ color: "#4F46E5" }}><Bookmark size={20} /></span>
+              </div>
+              <span className="text-sm font-semibold text-white">My Trips</span>
+            </GlassCard>
           </div>
         </div>
       </div>
@@ -303,19 +324,190 @@ function HomeScreen({ navigate }: { navigate: (s: Screen) => void }) {
   );
 }
 
+// ── APP ROOT ────────────────────────────────────────────────────
+
+const INITIAL_STATE: ScreenState = {
+  sessionId: "",
+  offers: [],
+  selectedFlight: null,
+  searchOrigin: "",
+  searchDestination: "",
+  searchDate: "",
+  passengerName: "",
+  passengerAssistance: "none",
+  bookingResult: null,
+  selectedBooking: null,
+  rescheduleBookingId: "",
+  rescheduleCurrentDate: "",
+  cancelBookingId: "",
+};
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>("splash");
-  const navigate = (s: Screen) => setScreen(s);
+  const [state, setState] = useState<ScreenState>(INITIAL_STATE);
+
+  const updateState = useCallback((partial: Partial<ScreenState>) => {
+    setState(prev => ({ ...prev, ...partial }));
+  }, []);
+
+  const navigate = useCallback((s: Screen) => {
+    setScreen(s);
+  }, []);
+
+  // ── Navigation helpers ──────────────────────────────────────
+
+  const goToResults = (offers: FlightOffer[], sessionId: string, origin: string, destination: string, date: string) => {
+    updateState({ offers, sessionId, searchOrigin: origin, searchDestination: destination, searchDate: date });
+    navigate("results");
+  };
+
+  const goToPassenger = (flight: FlightOffer) => {
+    updateState({ selectedFlight: flight });
+    navigate("passenger");
+  };
+
+  const goToConfirm = (name: string, assistance: string) => {
+    updateState({ passengerName: name, passengerAssistance: assistance });
+    navigate("confirm");
+  };
+
+  const goToSuccess = (booking: BookingResult) => {
+    updateState({ bookingResult: booking });
+    navigate("success");
+  };
+
+  const goToTripDetail = (booking: BookingResult) => {
+    updateState({ selectedBooking: booking });
+    navigate("tripDetail");
+  };
+
+  const goToCancel = (booking: BookingResult) => {
+    updateState({ cancelBookingId: booking.id });
+    navigate("cancel");
+  };
+
+  const goToReschedule = (booking: BookingResult) => {
+    updateState({ rescheduleBookingId: booking.id, rescheduleCurrentDate: booking.departure_date });
+    navigate("reschedule");
+  };
+
+  const goHome = () => {
+    setState(INITIAL_STATE);
+    navigate("home");
+  };
+
+  // ── Screen Renderer ─────────────────────────────────────────
 
   const renderScreen = () => {
     switch (screen) {
       case "splash":
         return <SplashScreen navigate={navigate} />;
+
       case "home":
-      case "bookings":
-      case "assistant":
-      case "profile":
         return <HomeScreen navigate={navigate} />;
+
+      case "voice":
+        return (
+          <VoiceScreen
+            onNavigate={(screenName, data) => {
+              if (screenName === "results" && data) {
+                goToResults(data.offers || [], data.sessionId || state.sessionId, data.origin || "", data.destination || "", data.date || "");
+              } else if (screenName === "home") {
+                goHome();
+              }
+            }}
+          />
+        );
+
+      case "results":
+        return (
+          <ResultsScreen
+            offers={state.offers}
+            origin={state.searchOrigin}
+            destination={state.searchDestination}
+            date={state.searchDate}
+            sessionId={state.sessionId}
+            onSelect={(offer) => goToPassenger(offer)}
+            onBack={() => navigate("voice")}
+          />
+        );
+
+      case "passenger":
+        return (
+          <PassengerScreen
+            sessionId={state.sessionId}
+            onComplete={(name, assistance) => goToConfirm(name, assistance)}
+            onBack={() => navigate("results")}
+          />
+        );
+
+      case "confirm":
+        return (
+          <ConfirmScreen
+            sessionId={state.sessionId}
+            flight={state.selectedFlight!}
+            origin={state.searchOrigin}
+            destination={state.searchDestination}
+            date={state.searchDate}
+            passengerName={state.passengerName}
+            assistance={state.passengerAssistance}
+            onConfirm={(booking) => goToSuccess(booking)}
+            onBack={() => navigate("passenger")}
+          />
+        );
+
+      case "success":
+        return (
+          <SuccessScreen
+            booking={state.bookingResult!}
+            onDone={goHome}
+          />
+        );
+
+      case "bookings":
+        return (
+          <TripsScreen
+            onSelectTrip={(booking) => goToTripDetail(booking)}
+            onBack={() => navigate("home")}
+          />
+        );
+
+      case "tripDetail":
+        return (
+          <TripDetailScreen
+            booking={state.selectedBooking!}
+            onCancel={(b) => goToCancel(b)}
+            onReschedule={(b) => goToReschedule(b)}
+            onBack={() => navigate("bookings")}
+          />
+        );
+
+      case "cancel":
+        return (
+          <CancelScreen
+            bookingId={state.cancelBookingId}
+            onComplete={() => navigate("bookings")}
+            onBack={() => navigate("tripDetail")}
+          />
+        );
+
+      case "reschedule":
+        return (
+          <RescheduleScreen
+            bookingId={state.rescheduleBookingId}
+            currentDate={state.rescheduleCurrentDate}
+            onComplete={() => navigate("bookings")}
+            onBack={() => navigate("tripDetail")}
+          />
+        );
+
+      case "portfolio":
+        return (
+          <PortfolioScreen
+            onBack={() => navigate("home")}
+          />
+        );
+
       default:
         return <HomeScreen navigate={navigate} />;
     }
