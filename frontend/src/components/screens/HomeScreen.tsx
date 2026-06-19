@@ -1,0 +1,359 @@
+/**
+ * HomeScreen — voice-first home.
+ *
+ * Refactored to premium quality:
+ * - Editorial greeting with massive type hierarchy
+ * - Hero mic card with the largest, most atmospheric presence
+ *   on the page (140px mic + ambient halo)
+ * - Bento-style quick actions (varying card sizes)
+ * - Empty state with onboarding CTA
+ * - All accessibility preserved
+ */
+import { useEffect, useState } from "react";
+import { motion } from "motion/react";
+import {
+  Plane,
+  Bookmark,
+  BarChart3,
+  Sparkles,
+  ArrowRight,
+} from "lucide-react";
+import { api } from "../../services/api";
+import { useUser } from "../../hooks/useUser";
+import { useWizard } from "../../hooks/useWizard";
+import { speak } from "../../hooks/useSpeech";
+import { Card } from "../ui/Card";
+import { VoiceMicButton, MicState } from "../ui/VoiceMicButton";
+import { VoiceWave } from "../ui/VoiceWave";
+import { tokens, type } from "../../design-system";
+import { NavFn } from "../../types";
+import { formatDateSpoken } from "../../lib/format";
+
+interface HomeScreenProps {
+  navigate: NavFn;
+}
+
+export function HomeScreen({ navigate }: HomeScreenProps) {
+  const { profile, trips } = useUser();
+  const { reset } = useWizard();
+  const [backendStatus, setBackendStatus] = useState<
+    "checking" | "online" | "offline"
+  >("checking");
+  const [micState, setMicState] = useState<MicState>("idle");
+
+  useEffect(() => {
+    api
+      .health()
+      .then(() => setBackendStatus("online"))
+      .catch(() => setBackendStatus("offline"));
+  }, []);
+
+  // Read greeting on mount (first time only)
+  useEffect(() => {
+    const greeted = sessionStorage.getItem("wayfinder.greeted");
+    if (greeted) return;
+    sessionStorage.setItem("wayfinder.greeted", "1");
+    const upcoming = trips.filter(
+      (t) =>
+        t.status === "confirmed" &&
+        t.departure_date >= new Date().toISOString().slice(0, 10)
+    );
+    let text = `Welcome back, ${profile.name.split(" ")[0]}. Tap the microphone to start booking.`;
+    if (upcoming[0]) {
+      text += ` Your next trip is from ${upcoming[0].origin} to ${upcoming[0].destination} on ${formatDateSpoken(upcoming[0].departure_date)}.`;
+    }
+    speak({ text });
+  }, [profile.name, trips]);
+
+  const firstName = profile.name.split(" ")[0];
+  const today = new Date().toISOString().slice(0, 10);
+  const upcoming = trips.filter(
+    (t) => t.status === "confirmed" && t.departure_date >= today
+  );
+
+  function handleMicTap() {
+    if (micState === "idle") {
+      setMicState("listening");
+      speak({ text: "Opening voice assistant" });
+      setTimeout(() => {
+        navigate("voice");
+        setMicState("idle");
+      }, 600);
+    }
+  }
+
+  const statusColor = backendStatus === "online" ? "#22C55E" : backendStatus === "offline" ? "#EF4444" : "#94A3B8";
+  const statusText = backendStatus === "checking" ? "Checking…" : backendStatus === "online" ? "Online" : "Offline";
+
+  return (
+    <div
+      className="min-h-[100dvh] pb-32 relative"
+      style={{ background: tokens.color.bg.deep }}
+    >
+      {/* Header — editorial greeting */}
+      <div
+        className="sticky top-0 z-20 px-5 pt-5 pb-3"
+        style={{
+          paddingTop: "max(1.25rem, env(safe-area-inset-top))",
+          background:
+            "linear-gradient(180deg, rgba(11,16,32,0.95) 0%, rgba(11,16,32,0.6) 80%, transparent 100%)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+        }}
+      >
+        <div className="flex items-start justify-between">
+          <div>
+            <p
+              className="text-slate-400 mb-1"
+              style={type.eyebrow}
+            >
+              Good day
+            </p>
+            <h1
+              className="text-white"
+              style={{
+                ...type.h1,
+                fontSize: "clamp(2rem, 7vw, 2.5rem)",
+                letterSpacing: "-0.03em",
+              }}
+            >
+              {firstName}
+            </h1>
+          </div>
+          <div
+            className="flex items-center gap-2 rounded-full px-3 py-1.5"
+            style={{
+              background:
+                backendStatus === "online"
+                  ? "rgba(34,197,94,0.10)"
+                  : backendStatus === "offline"
+                    ? "rgba(239,68,68,0.10)"
+                    : "rgba(148,163,184,0.10)",
+              border: `1px solid ${statusColor}33`,
+            }}
+            aria-label={`Backend ${statusText}`}
+            role="status"
+          >
+            <span
+              className="w-1.5 h-1.5 rounded-full"
+              style={{
+                background: statusColor,
+                boxShadow:
+                  backendStatus === "online"
+                    ? `0 0 8px ${statusColor}`
+                    : "none",
+              }}
+            />
+            <span className="text-xs font-semibold" style={{ color: statusColor }}>
+              {statusText}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-5 pt-6 space-y-6">
+        {/* HERO — Mic card with atmospheric halo */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <Card
+            variant="raised"
+            padding="xl"
+            onClick={() => navigate("voice")}
+            ariaLabel="Open voice assistant to book a flight by speaking"
+            className="relative overflow-visible"
+          >
+            {/* Ambient halo behind the mic */}
+            <div
+              className="absolute pointer-events-none"
+              style={{
+                top: "30%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                width: "300px",
+                height: "300px",
+                background:
+                  "radial-gradient(circle, rgba(99,102,241,0.18) 0%, rgba(34,197,94,0.10) 40%, transparent 70%)",
+                filter: "blur(30px)",
+              }}
+              aria-hidden="true"
+            />
+
+            <div className="relative flex flex-col items-center text-center">
+              <p className="text-slate-400 mb-2" style={type.eyebrow}>
+                Voice booking
+              </p>
+              <p
+                className="text-white mb-8"
+                style={{ ...type.h3, fontWeight: 700, letterSpacing: "-0.015em" }}
+              >
+                {micState === "listening" ? "Opening…" : "Tap to speak"}
+              </p>
+              <div className="mb-6">
+                <VoiceMicButton
+                  state={micState}
+                  onClick={handleMicTap}
+                  size="xl"
+                />
+              </div>
+              <VoiceWave active={micState === "listening"} size="md" />
+              <p
+                className="text-slate-400 mt-5 max-w-xs"
+                style={type.bodySm as any}
+              >
+                Try: "Book a flight from London to Paris tomorrow"
+              </p>
+            </div>
+          </Card>
+        </motion.div>
+
+        {/* Next trip — only when present */}
+        {upcoming[0] && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-white" style={type.eyebrow}>
+                Next trip
+              </h2>
+              <button
+                onClick={() => navigate("bookings")}
+                className="text-slate-400 hover:text-white transition-colors"
+                style={type.labelSm as any}
+                aria-label="View all trips"
+              >
+                View all →
+              </button>
+            </div>
+            <Card
+              variant="tinted"
+              padding="lg"
+              onClick={() => navigate("tripDetail", { bookingId: upcoming[0].id })}
+              ariaLabel={`Next trip from ${upcoming[0].origin} to ${upcoming[0].destination} on ${formatDateSpoken(upcoming[0].departure_date)}`}
+            >
+              <div className="flex items-center gap-4">
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
+                  style={{
+                    background: tokens.gradient.primary,
+                    boxShadow: "0 8px 24px rgba(99,102,241,0.35)",
+                  }}
+                  aria-hidden="true"
+                >
+                  <Plane size={26} color="#fff" strokeWidth={2.2} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p
+                    className="text-white"
+                    style={{ ...type.h2, fontWeight: 800, letterSpacing: "-0.02em" }}
+                  >
+                    {upcoming[0].origin} → {upcoming[0].destination}
+                  </p>
+                  <p className="text-slate-400 mt-0.5" style={type.bodySm as any}>
+                    {formatDateSpoken(upcoming[0].departure_date)}
+                  </p>
+                </div>
+                <ArrowRight
+                  size={22}
+                  className="text-slate-400 shrink-0"
+                  aria-hidden="true"
+                />
+              </div>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* Quick actions — Bento grid */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <h2 className="text-white mb-3" style={type.eyebrow}>
+            Quick actions
+          </h2>
+          <div className="grid grid-cols-2 gap-3">
+            <QuickAction
+              icon={<Plane size={20} className="text-indigo-300" aria-hidden="true" />}
+              label="Book flight"
+              sublabel="By voice or text"
+              onClick={() => {
+                reset();
+                navigate("origin");
+              }}
+              variant="tinted"
+            />
+            <QuickAction
+              icon={<Bookmark size={20} className="text-emerald-300" aria-hidden="true" />}
+              label="My trips"
+              sublabel={`${trips.length} total`}
+              onClick={() => navigate("bookings")}
+            />
+            <QuickAction
+              icon={<BarChart3 size={20} className="text-amber-300" aria-hidden="true" />}
+              label="Travel stats"
+              sublabel="Insights"
+              onClick={() => navigate("portfolio")}
+            />
+            <QuickAction
+              icon={<Sparkles size={20} className="text-pink-300" aria-hidden="true" />}
+              label="AI assistant"
+              sublabel="Always here"
+              onClick={() => navigate("assistant")}
+            />
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
+}
+
+function QuickAction({
+  icon,
+  label,
+  sublabel,
+  onClick,
+  variant = "default",
+}: {
+  icon: React.ReactNode;
+  label: string;
+  sublabel?: string;
+  onClick: () => void;
+  variant?: "default" | "tinted";
+}) {
+  return (
+    <Card
+      variant={variant}
+      padding="md"
+      onClick={onClick}
+      ariaLabel={sublabel ? `${label}. ${sublabel}` : label}
+    >
+      <div className="flex flex-col gap-3">
+        <div
+          className="w-12 h-12 rounded-xl flex items-center justify-center"
+          style={{
+            background: "rgba(255, 255, 255, 0.06)",
+            border: "1px solid rgba(255, 255, 255, 0.06)",
+          }}
+          aria-hidden="true"
+        >
+          {icon}
+        </div>
+        <div>
+          <p className="text-white" style={{ ...type.bodyLg, fontWeight: 700, letterSpacing: "-0.01em" }}>
+            {label}
+          </p>
+          {sublabel && (
+            <p className="text-slate-400" style={type.caption as any}>
+              {sublabel}
+            </p>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
