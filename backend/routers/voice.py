@@ -179,6 +179,15 @@ async def voice_command(req: VoiceCommandRequest):
         elif intent == "search_with_budget":
             return await _handle_search_with_budget(params, response_text, req.session_id)
 
+        elif intent == "select_flight":
+            return await _handle_select_flight(params, response_text, req.session_id)
+
+        elif intent == "provide_name":
+            return await _handle_provide_name(params, response_text, req.session_id)
+
+        elif intent == "confirm_booking":
+            return await _handle_confirm_booking(params, response_text, req.session_id)
+
         elif intent == "help":
             return VoiceCommandResponse(
                 intent="help",
@@ -733,3 +742,212 @@ async def voice_listen(audio: UploadFile = File(...)):
                 temp_path.unlink()
         except Exception:
             pass
+
+# ═══════════════════════════════════════════════════════════════════
+# CONTINUOUS VOICE FLOW — Multi-turn booking handlers
+# These enable an end-to-end voice-only conversation where the user
+# never leaves the VoiceScreen.
+# ═══════════════════════════════════════════════════════════════════
+
+
+async def _handle_select_flight(params: dict, response_text: str, session_id: str | None) -> VoiceCommandResponse:
+    """
+    Handle "select the first/cheapest/second flight" voice command.
+    Resolves position (first, cheapest, "3") to an actual offer from cached results.
+    """
+    position = params.get("position", "cheapest")
+    user_lang = params.get("user_lang", "")
+
+    # Get the session
+    sid = session_id or params.get("session_id", "")
+    if not sid:
+        return VoiceCommandResponse(
+            intent="select_flight",
+            parameters=params,
+            response_text=_translate_response("I need to search for flights first. Try saying 'book a flight from New York to London'.", user_lang),
+        )
+
+    # Get cached offers for this session
+    cached = get_offers(sid)
+    offers = []
+    for co in cached:
+        od = co.get("offer_data", {})
+        if isinstance(od, dict) and od.get("id"):
+            offers.append(od)
+
+    if not offers:
+        return VoiceCommandResponse(
+            intent="select_flight",
+            parameters=params,
+            response_text=_translate_response("I don't have any flight results cached. Please search for flights again.", user_lang),
+        )
+
+    # Resolve position to an offer
+    selected_offer = None
+    if position == "cheapest":
+        selected_offer = min(offers, key=lambda o: float(o.get("price", 0) or 0))
+    elif position == "first":
+        selected_offer = offers[0]
+    elif position == "second":
+        selected_offer = offers[1] if len(offers) > 1 else None
+    elif position == "third":
+        selected_offer = offers[2] if len(offers) > 2 else None
+    elif position == "fourth":
+        selected_offer = offers[3] if len(offers) > 3 else None
+    elif position == "fifth":
+        selected_offer = offers[4] if len(offers) > 4 else None
+    else:
+        # Try numeric position
+        try:
+            idx = int(position) - 1
+            if 0 <= idx < len(offers):
+                selected_offer = offers[idx]
+        except (ValueError, IndexError):
+            selected_offer = offers[0]
+
+    if not selected_offer:
+        return VoiceCommandResponse(
+            intent="select_flight",
+            parameters=params,
+            response_text=_translate_response("I couldn't find that flight option. Try saying 'first' or 'cheapest'.", user_lang),
+        )
+
+    offer_id = selected_offer["id"]
+    summary = (
+        f"{selected_offer.get('airline', '')} {selected_offer.get('flight_number', '')} - "
+        f"{selected_offer.get('origin', '')} to {selected_offer.get('destination', '')}, "
+        f"{selected_offer.get('price', '')} {selected_offer.get('currency', '')}"
+    )
+
+    # Save offer selection in wizard session
+    process_step(sid, "flight_selection", {
+        "offer_id": offer_id,
+        "flight_summary": summary,
+    })
+
+    speech = (
+        f"Great choice! {summary}. "
+        f"What is the passenger's full name?"
+    )
+
+    return VoiceCommandResponse(
+        intent="select_flight",
+        parameters={
+            "session_id": sid,
+            "offer_id": offer_id,
+            "selected_flight_summary": summary,
+            "next_step": "passenger",
+            "user_lang": user_lang,
+        },
+        response_text=response_text or _translate_response(speech, user_lang),
+    )
+
+
+async def _handle_provide_name(params: dict, response_text: str, session_id: str | None) -> VoiceCommandResponse:
+    """
+    Handle user providing their passenger name.
+    Saves name in wizard session, then asks if they have assistance needs.
+    """
+    name = params.get("name", "").strip()
+    user_lang = params.get("user_lang", "")
+    sid = session_id or params.get("session_id", "")
+
+    if not name:
+        return VoiceCommandResponse(
+            intent="provide_name",
+            parameters=params,
+            response_text=_translate_response("I didn't catch your name. Could you please say it again?", user_lang),
+        )
+
+    if sid:
+        # Save passenger name in wizard (this advances to assistance step)
+        process_step(sid, "passenger", {"name": name})
+
+        # Auto-accept "no assistance" and move to confirmation
+        process_step(sid, "assistance", {"assistance": "none"})
+
+        session_data = get_db_session(sid)
+        flight_summary = (session_data or {}).get("selected_flight_summary", "")
+
+        speech = (
+            f"Thanks, {name}! Ready to book {flight_summary}. "
+            f"Shall I confirm the booking?"
+        )
+    else:
+        speech = f"Thanks, {name}! Let me look up your booking session."
+
+    return VoiceCommandResponse(
+        intent="provide_name",
+        parameters={
+            "session_id": sid,
+            "passenger_name": name,
+            "next_step": "assistance",
+            "user_lang": user_lang,
+        },
+        response_text=response_text or _translate_response(speech, user_lang),
+    )
+
+
+async def _handle_confirm_booking(params: dict, response_text: str, session_id: str | None) -> VoiceCommandResponse:
+    """
+    Handle user confirming the booking.
+    Calls create_booking to book via Duffel (or mock fallback).
+    """
+    user_lang = params.get("user_lang", "")
+    sid = session_id or params.get("session_id", "")
+
+    if not sid:
+        return VoiceCommandResponse(
+            intent="confirm_booking",
+            parameters=params,
+            response_text=_translate_response("I don't have an active booking session. Let's start over - say 'book a flight'.", user_lang),
+        )
+
+    # Save assistance default if not set
+    from database import get_session as get_db_sesh
+    session_data = get_db_sesh(sid)
+    if session_data and not session_data.get("passenger_assistance"):
+        process_step(sid, "assistance", {"assistance": "none"})
+
+    # Save confirmation in wizard
+    process_step(sid, "confirmation", {"confirmed": True})
+
+    # Create the booking
+    from routers.booking import create_booking
+    from models import BookingCreateRequest
+
+    try:
+        booking_result = await create_booking(BookingCreateRequest(session_id=sid))
+
+        speech = (
+            f"Your flight is booked! "
+            f"Reference: {booking_result.booking_reference}. "
+            f"{booking_result.origin} to {booking_result.destination} "
+            f"on {booking_result.departure_date}. "
+            f"Total: {booking_result.total_amount}. "
+            f"Thank you for using Wayfinder!"
+        )
+
+        return VoiceCommandResponse(
+            intent="confirm_booking",
+            parameters={
+                "session_id": sid,
+                "booking_id": booking_result.id,
+                "booking_reference": booking_result.booking_reference,
+                "origin": booking_result.origin,
+                "destination": booking_result.destination,
+                "departure_date": booking_result.departure_date,
+                "total_amount": booking_result.total_amount,
+                "passenger_name": booking_result.passenger_name,
+                "booking_complete": True,
+                "user_lang": user_lang,
+            },
+            response_text=response_text or _translate_response(speech, user_lang),
+        )
+
+    except HTTPException as e:
+        return VoiceCommandResponse(
+            intent="confirm_booking",
+            parameters=params,
+            response_text=_translate_response(f"Booking failed: {e.detail}. Please try again.", user_lang),
+        )

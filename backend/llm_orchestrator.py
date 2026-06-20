@@ -323,7 +323,93 @@ class LLMOrchestrator:
         text_lower = text_en.lower().strip()
         logger.info(f"English translation: {text_en}")
 
-        # ── Step 3: HARD WALL — flight-only check ───────────────
+        # ── Step 3: Detect multi-turn intents (bypass hard wall) ──
+        # These are checked BEFORE the flight-only hard wall because
+        # they're part of a multi-turn conversation (selecting a flight,
+        # providing name, confirming booking)
+
+        is_select = any(w in text_lower for w in [
+            "first", "first one", "first flight", "cheapest", "cheapest one",
+            "select", "choose", "pick", "i'll take",
+            "that one", "that flight", "number",
+            "second", "third", "fourth", "fifth",
+            "i want this", "i want that", "go with",
+            "book the cheapest", "book the first", "book number",
+        ])
+        is_confirm = any(w in text_lower for w in [
+            "yes", "yeah", "confirm", "proceed", "go ahead",
+            "do it", "sure",
+            "correct", "that's right",
+            "please book", "yes please",
+        ]) or re.search(r'\bok\b', text_lower) or re.search(r'\bokay\b', text_lower)
+        is_provide_name = any(w in text_lower for w in [
+            "my name is", "name is", "i am ", "this is ",
+        ])
+
+        # ── SELECT FLIGHT (caught before hard wall + search check) ──
+        if is_select:
+            position = "cheapest"
+            if any(w in text_lower for w in ["first", "first one", "first flight"]):
+                position = "first"
+            elif any(w in text_lower for w in ["second"]):
+                position = "second"
+            elif any(w in text_lower for w in ["third"]):
+                position = "third"
+            elif any(w in text_lower for w in ["fourth"]):
+                position = "fourth"
+            elif any(w in text_lower for w in ["fifth"]):
+                position = "fifth"
+            elif any(w in text_lower for w in ["cheapest", "cheapest one", "cheap"]):
+                position = "cheapest"
+
+            num_match = re.search(r'(?:number|pick|select|option)\s+(\d+)', text_lower)
+            if num_match:
+                position = num_match.group(1)
+
+            response_en = f"Selecting the {position} flight for you."
+            if user_lang != "en":
+                response_text = _translate_text(response_en, user_lang)
+            else:
+                response_text = response_en
+
+            return {
+                "intent": "select_flight",
+                "parameters": {"position": str(position), "user_lang": user_lang},
+                "response_text": response_text,
+            }
+
+        # ── CONFIRM ──
+        if is_confirm:
+            response_en = "Booking confirmed! Let me process that."
+            if user_lang != "en":
+                response_text = _translate_text(response_en, user_lang)
+            else:
+                response_text = response_en
+
+            return {
+                "intent": "confirm_booking",
+                "parameters": {"confirmed": True, "user_lang": user_lang},
+                "response_text": response_text,
+            }
+
+        # ── PROVIDE NAME ──
+        if is_provide_name:
+            name_match = re.search(r'(?:my name is|name is|i am |this is )(.+)', text_lower, re.IGNORECASE)
+            name = name_match.group(1).strip().title() if name_match else text_en.strip().title()
+
+            response_en = f"Got it, {name}."
+            if user_lang != "en":
+                response_text = _translate_text(response_en, user_lang)
+            else:
+                response_text = response_en
+
+            return {
+                "intent": "provide_name",
+                "parameters": {"name": name, "user_lang": user_lang},
+                "response_text": response_text,
+            }
+
+        # ── Step 4: HARD WALL — flight-only check for new conversations ──
         if not _check_flight_related(text_en):
             response_en = FLIGHT_RESPONSES["not_flight"]
             if user_lang != "en":
@@ -336,7 +422,7 @@ class LLMOrchestrator:
                 "response_text": response_text,
             }
 
-        # ── Step 4: Extract parameters ──────────────────────────
+        # ── Step 5: Extract parameters ──────────────────────────
 
         # Detect intent
         is_help = any(w in text_lower for w in ["help", "what can you", "how does", "hello", "hi ", "what do you"])
@@ -366,6 +452,40 @@ class LLMOrchestrator:
         # ── Step 5: Build response ──────────────────────────────
 
         # Store user language in parameters for later translation
+
+        # ── SELECT FLIGHT (must be before is_search to avoid conflict) ──
+        if is_select and not is_search:
+            # Extract which flight they want (first, cheapest, or explicit number)
+            position = "cheapest"
+            if any(w in text_lower for w in ["first", "first one", "first flight"]):
+                position = "first"
+            elif any(w in text_lower for w in ["second"]):
+                position = "second"
+            elif any(w in text_lower for w in ["third"]):
+                position = "third"
+            elif any(w in text_lower for w in ["fourth"]):
+                position = "fourth"
+            elif any(w in text_lower for w in ["fifth"]):
+                position = "fifth"
+            elif any(w in text_lower for w in ["cheapest", "cheapest one", "cheap"]):
+                position = "cheapest"
+
+            # Extract number: "number 2", "pick 3", "select 4"
+            num_match = re.search(r'(?:number|pick|select|option)\s+(\d+)', text_lower)
+            if num_match:
+                position = num_match.group(1)
+
+            response_en = f"Selecting the {position} flight for you."
+            if user_lang != "en":
+                response_text = _translate_text(response_en, user_lang)
+            else:
+                response_text = response_en
+
+            return {
+                "intent": "select_flight",
+                "parameters": {"position": str(position), "user_lang": user_lang},
+                "response_text": response_text,
+            }
 
         # HELP
         if is_help and not is_search and not is_cancel:
