@@ -1,44 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "motion/react";
-import { Mic, MicOff, ArrowLeft, Loader2, Sparkles, ChevronRight } from "lucide-react";
+import { Mic, MicOff, ArrowLeft, Loader2, ChevronRight } from "lucide-react";
 import { api } from "../../services/api";
 
 type VoiceState = "greeting" | "idle" | "listening" | "processing" | "result";
-
-interface ChatMessage {
-  role: "assistant" | "user";
-  text: string;
-  parameters?: Record<string, any>;
-  intent?: string;
-}
-
-function GlassCard({ children, className = "", onClick }: { children: React.ReactNode; className?: string; onClick?: () => void }) {
-  return (
-    <div
-      onClick={onClick}
-      className={`rounded-2xl border border-white/8 backdrop-blur-xl ${onClick ? "cursor-pointer active:scale-[0.98] transition-transform" : ""} ${className}`}
-      style={{ background: "rgba(21,28,47,0.7)" }}
-    >
-      {children}
-    </div>
-  );
-}
-
-function PrimaryButton({ children, onClick, className = "", disabled = false, icon }: {
-  children: React.ReactNode; onClick?: () => void; className?: string; disabled?: boolean; icon?: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`flex items-center justify-center gap-2 rounded-2xl px-6 py-4 font-semibold text-white transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:ring-offset-2 focus:ring-offset-[#0B1020] disabled:opacity-40 ${className}`}
-      style={{ background: disabled ? "#2D3B55" : "linear-gradient(135deg,#4F46E5,#6366f1)" }}
-    >
-      {icon && <span>{icon}</span>}
-      {children}
-    </button>
-  );
-}
 
 function VoiceWave({ active, size = "md" }: { active: boolean; size?: "sm" | "md" | "lg" }) {
   const bars = size === "lg" ? 9 : size === "md" ? 7 : 5;
@@ -68,37 +33,6 @@ function VoiceWave({ active, size = "md" }: { active: boolean; size?: "sm" | "md
   );
 }
 
-function MicButton({ size = "lg", active = false, onClick }: { size?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl"; active?: boolean; onClick?: (e?: React.MouseEvent) => void }) {
-  const dims: Record<string, string> = { sm: "w-14 h-14", md: "w-20 h-20", lg: "w-28 h-28", xl: "w-36 h-36", "2xl": "w-44 h-44", "3xl": "w-52 h-52" };
-  const iconSize: Record<string, number> = { sm: 20, md: 28, lg: 44, xl: 52, "2xl": 64, "3xl": 72 };
-  return (
-    <motion.button
-      onClick={onClick}
-      className={`relative ${dims[size]} rounded-full flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-[#4F46E5]/50`}
-      whileTap={{ scale: 0.92 }}
-    >
-      {active && (
-        <motion.div
-          className="absolute inset-0 rounded-full"
-          style={{ background: "rgba(79,70,229,0.15)" }}
-          animate={{ scale: [1, 1.3, 1] }}
-          transition={{ duration: 1.5, repeat: Infinity }}
-        />
-      )}
-      <div
-        className="relative w-full h-full rounded-full flex items-center justify-center"
-        style={{
-          background: active ? "linear-gradient(135deg,#4F46E5,#6366f1)" : "linear-gradient(135deg,rgba(79,70,229,0.25),rgba(99,102,241,0.15))",
-          border: "2px solid rgba(79,70,229,0.4)",
-          boxShadow: active ? "0 0 40px rgba(79,70,229,0.5)" : "0 0 20px rgba(79,70,229,0.2)",
-        }}
-      >
-        {active ? <MicOff size={iconSize[size]} color="#fff" /> : <Mic size={iconSize[size]} color="#fff" />}
-      </div>
-    </motion.button>
-  );
-}
-
 function generateGreeting(): string {
   const hour = new Date().getHours();
   let timeGreeting: string;
@@ -110,14 +44,13 @@ function generateGreeting(): string {
     `${timeGreeting}, and welcome to Wayfinder. Where would you like to go today?`,
     `${timeGreeting}! Welcome to Wayfinder. I'm your travel assistant. Where can I take you?`,
     `${timeGreeting} and welcome. I'm Wayfinder, your voice travel companion. Tell me where you'd like to fly!`,
-    `${timeGreeting}! Ready for your next trip? Just say something like "Book a flight from London to Paris tomorrow".`,
+    `${timeGreeting}! Ready for your next trip? Just say something like \"Book a flight from London to Paris tomorrow\".`,
   ];
   return greetings[Math.floor(Math.random() * greetings.length)];
 }
 
 export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: string, data?: any) => void }) {
   const [state, setState] = useState<VoiceState>("greeting");
-  const [conversation, setConversation] = useState<ChatMessage[]>([]);
   const [transcript, setTranscript] = useState("");
   const [parameters, setParameters] = useState<Record<string, any>>({});
   const [intent, setIntent] = useState("");
@@ -125,7 +58,6 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
   const [inputText, setInputText] = useState("");
   const [sessionId, setSessionId] = useState<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const chatRef = useRef<HTMLDivElement>(null);
   const greetingPlayed = useRef(false);
 
   const playTts = useCallback(async (text: string) => {
@@ -135,39 +67,35 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
       const audio = new Audio(url);
       audio.onended = () => URL.revokeObjectURL(url);
       audio.play().catch(() => {});
+      return new Promise<void>((resolve) => {
+        audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+        audio.onerror = () => resolve();
+      });
     } catch {
       // TTS error — non-critical
+      return;
     }
   }, []);
 
-  // ── GREETING ON MOUNT ──────────────────────────────────────────
+  // ── GREETING ON MOUNT (AUDIO ONLY) ────────────────────────────
 
   useEffect(() => {
     if (greetingPlayed.current) return;
     greetingPlayed.current = true;
 
     const greeting = generateGreeting();
-    setConversation([{ role: "assistant", text: greeting }]);
-    // Small delay so the UI renders before TTS plays
-    const t = setTimeout(() => playTts(greeting), 400);
-    const t2 = setTimeout(() => setState("idle"), 1200);
-    return () => { clearTimeout(t); clearTimeout(t2); };
+    const t = setTimeout(async () => {
+      await playTts(greeting);
+      setState("idle");
+    }, 500);
+    return () => clearTimeout(t);
   }, [playTts]);
-
-  // Auto-scroll chat to the latest message
-  useEffect(() => {
-    if (chatRef.current) {
-      chatRef.current.scrollTop = chatRef.current.scrollHeight;
-    }
-  }, [conversation]);
 
   // ── VOICE COMMAND HANDLING ─────────────────────────────────────
 
   const handleVoiceCommand = useCallback(async (text: string) => {
     if (!text.trim()) return;
 
-    // Add user message to conversation
-    setConversation(prev => [...prev, { role: "user", text }]);
     setTranscript(text);
     setState("processing");
     setError("");
@@ -180,46 +108,37 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
         setSessionId(result.parameters.session_id);
       }
 
-      // Add assistant response to conversation
-      const assistantMsg: ChatMessage = {
-        role: "assistant",
-        text: result.response_text,
-        parameters: result.parameters,
-        intent: result.intent,
-      };
-      setConversation(prev => [...prev, assistantMsg]);
+      // Auto-prompt for next input after response
+      setState("result");
 
-      // Play TTS response
-      playTts(result.response_text);
+      // Play response via audio
+      await playTts(result.response_text);
 
-      // If it's a search result with offers, navigate to results
+      // Check if we have results with offers — navigate
       if (
         (result.intent === "search_flights" || result.intent === "search_with_budget") &&
         result.parameters?.offers?.length > 0
       ) {
-        setState("result");
+        onNavigate("results", { parameters: result.parameters, intent: result.intent });
         return;
       }
 
-      // If all booking params are ready, show continue button
-      if (
-        result.intent === "book_flight" &&
-        result.parameters?.booking_id
-      ) {
-        setState("result");
+      // If booking is complete — go home or show success
+      if (result.intent === "book_flight" && result.parameters?.booking_id) {
         return;
       }
 
-      // Otherwise — conversational: prompt user to speak again
-      // Wait for TTS to finish, then auto-prompt
-      setState("result");
+      // Continue conversation — re-prompt for next input
+      setState("idle");
+      setTranscript("");
+
     } catch (err: any) {
       setError(err.message || "Something went wrong");
       setState("idle");
     }
-  }, [playTts]);
+  }, [playTts, sessionId, onNavigate]);
 
-  // ── START LISTENING ────────────────────────────────────────────
+  // ── SPEECH RECOGNITION ────────────────────────────────────────
 
   const recognitionRef = useRef<any>(null);
 
@@ -298,7 +217,6 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
   const handleReset = () => {
     setState("idle");
     setTranscript("");
-    setConversation([]);
     setParameters({});
     setIntent("");
     setError("");
@@ -316,97 +234,117 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
         >
           <ArrowLeft size={20} color="#94A3B8" />
         </button>
-        <h1 className="text-lg font-bold text-white">Wayfinder Assistant</h1>
+        <h1 className="text-lg font-bold text-white">Wayfinder</h1>
+        <div className="flex-1" />
+        {/* Status badge */}
+        <span
+          className="text-[10px] font-semibold tracking-wider uppercase px-2 py-1 rounded-full"
+          style={{
+            background: state === "listening" ? "rgba(79,70,229,0.15)" : "rgba(255,255,255,0.05)",
+            color: state === "listening" ? "#818CF8" : "#64748B",
+            border: `1px solid ${state === "listening" ? "rgba(79,70,229,0.2)" : "rgba(255,255,255,0.06)"}`,
+          }}
+        >
+          {state === "greeting" ? "Speaking..." : state === "listening" ? "Listening" : state === "processing" ? "Thinking" : "Ready"}
+        </span>
       </div>
 
-      <div className="flex-1 px-5 space-y-4 pb-8 flex flex-col">
-        {/* ── CHAT CONVERSATION ────────────────────────────── */}
-        <div
-          ref={chatRef}
-          className="flex-1 space-y-3 overflow-y-auto scroll-smooth pr-1"
-          style={{ maxHeight: "calc(100vh - 280px)" }}
-        >
-          {conversation.length === 0 && state === "greeting" && (
-            <div className="flex items-center justify-center h-full">
-              <Loader2 size={32} color="#4F46E5" className="animate-spin" />
+      <div className="flex-1 px-5 pb-8 flex flex-col items-center justify-center">
+        {/* ── GREETING / LOADING ──────────────────────────── */}
+        {state === "greeting" && (
+          <div className="flex flex-col items-center gap-6">
+            <div
+              className="w-36 h-36 rounded-full flex items-center justify-center"
+              style={{ background: "linear-gradient(135deg,rgba(79,70,229,0.15),rgba(99,102,241,0.08))", border: "2px solid rgba(79,70,229,0.2)" }}
+            >
+              <Loader2 size={52} color="#6366F1" className="animate-spin" />
             </div>
-          )}
+            <p className="text-lg font-semibold text-white/70">Welcome...</p>
+            <VoiceWave active={true} size="lg" />
+          </div>
+        )}
 
-          {conversation.map((msg, i) => (
-            <div key={i} className={`flex ${msg.role === "assistant" ? "justify-start" : "justify-end"}`}>
-              {msg.role === "assistant" ? (
-                <div
-                  className="max-w-[85%] rounded-2xl px-5 py-4 text-left"
-                  style={{
-                    background: "rgba(79,70,229,0.1)",
-                    border: "1px solid rgba(79,70,229,0.15)",
-                    borderBottomLeftRadius: i === conversation.length - 1 ? 4 : undefined,
-                  }}
-                >
-                  <p className="text-sm font-semibold text-indigo-300 mb-1">
-                    {i === 0 ? "✈️ Wayfinder" : "Wayfinder"}
-                  </p>
-                  <p className="text-sm leading-relaxed text-white/90 whitespace-pre-wrap">{msg.text}</p>
+        {/* ── IDLE — TAP TO SPEAK ─────────────────────────── */}
+        {state === "idle" && (
+          <div className="flex flex-col items-center gap-6">
+            {/* BIG MIC */}
+            <motion.button
+              onClick={() => startRecording()}
+              className="w-52 h-52 rounded-full flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-[#4F46E5]/50 active:scale-90 transition-transform"
+              style={{
+                background: "linear-gradient(135deg,rgba(79,70,229,0.2),rgba(99,102,241,0.1))",
+                border: "3px solid rgba(79,70,229,0.3)",
+                boxShadow: "0 0 30px rgba(79,70,229,0.2)",
+              }}
+              whileTap={{ scale: 0.9 }}
+            >
+              <Mic size={72} color="#fff" />
+            </motion.button>
+            <VoiceWave active={false} size="lg" />
+            <p className="text-lg font-bold text-white">Tap to speak</p>
+          </div>
+        )}
 
-                  {/* Show detected parameters as tags */}
-                  {msg.parameters && Object.keys(msg.parameters).filter(k => !["session_id","offers","user_lang","missing","unknown_intent","error"].includes(k) && msg.parameters?.[k]).length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {Object.entries(msg.parameters).map(([key, val]) => {
-                        if (!val || ["session_id","offers","user_lang","missing","unknown_intent","error"].includes(key)) return null;
-                        return (
-                          <span key={key}
-                            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
-                            style={{ background: "rgba(79,70,229,0.15)", color: "#A5B4FC", border: "1px solid rgba(79,70,229,0.2)" }}
-                          >
-                            {key.replace(/_/g, " ")}: {String(val)}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div
-                  className="max-w-[75%] rounded-2xl px-4 py-3 text-left"
-                  style={{
-                    background: "rgba(99,102,241,0.2)",
-                    border: "1px solid rgba(99,102,241,0.25)",
-                    borderBottomRightRadius: 4,
-                  }}
-                >
-                  <p className="text-sm text-white/85">{msg.text}</p>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* ── LISTENING INDICATOR ──────────────────────────── */}
+        {/* ── LISTENING ──────────────────────────────────── */}
         {state === "listening" && (
-          <div
-            className="flex items-center justify-center gap-3 py-3 rounded-xl"
-            style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.15)" }}
-          >
-            <VoiceWave active={true} size="sm" />
-            <p className="text-sm font-medium text-[#4F46E5]">Listening...</p>
-            <p className="text-xs text-[#64748B]">Tap mic to stop</p>
+          <div className="flex flex-col items-center gap-6">
+            <motion.button
+              onClick={() => stopRecording()}
+              className="w-52 h-52 rounded-full flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-[#4F46E5]/50"
+              style={{
+                background: "linear-gradient(135deg,#4F46E5,#6366f1)",
+                border: "3px solid rgba(255,255,255,0.2)",
+                boxShadow: "0 0 50px rgba(79,70,229,0.5)",
+              }}
+              whileTap={{ scale: 0.9 }}
+            >
+              <MicOff size={72} color="#fff" />
+            </motion.button>
+            <VoiceWave active={true} size="lg" />
+            <p className="text-lg font-bold text-[#4F46E5]">Listening...</p>
+            {transcript && (
+              <p className="text-sm italic text-white/60 max-w-xs text-center">
+                "{transcript}"
+              </p>
+            )}
           </div>
         )}
 
+        {/* ── PROCESSING ─────────────────────────────────── */}
         {state === "processing" && (
-          <div
-            className="flex items-center justify-center gap-3 py-3 rounded-xl"
-            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
-          >
-            <Loader2 size={18} color="#4F46E5" className="animate-spin" />
-            <p className="text-sm font-medium text-white/70">Thinking...</p>
+          <div className="flex flex-col items-center gap-6">
+            <div
+              className="w-44 h-44 rounded-full flex items-center justify-center"
+              style={{ background: "linear-gradient(135deg,rgba(79,70,229,0.15),rgba(99,102,241,0.08))", border: "2px solid rgba(79,70,229,0.2)" }}
+            >
+              <Loader2 size={64} color="#4F46E5" className="animate-spin" />
+            </div>
+            <p className="text-lg font-bold text-white">Thinking...</p>
+            {transcript && (
+              <p className="text-sm italic text-white/60 max-w-xs text-center">
+                "{transcript}"
+              </p>
+            )}
           </div>
         )}
 
-        {/* ── ERROR ───────────────────────────────────────── */}
+        {/* ── RESULT (transient - transitions back to idle after TTS ends) ── */}
+        {state === "result" && (
+          <div className="flex flex-col items-center gap-6">
+            <div
+              className="w-44 h-44 rounded-full flex items-center justify-center"
+              style={{ background: "linear-gradient(135deg,rgba(34,197,94,0.15),rgba(34,197,94,0.08))", border: "2px solid rgba(34,197,94,0.2)" }}
+            >
+              <Loader2 size={64} color="#22C55E" className="animate-spin" />
+            </div>
+            <p className="text-lg font-bold text-emerald-400">Speaking...</p>
+          </div>
+        )}
+
+        {/* ── ERROR ──────────────────────────────────────── */}
         {error && (
           <div
-            className="rounded-xl px-4 py-3 text-center"
+            className="mt-6 rounded-xl px-5 py-4 text-center max-w-sm"
             style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)" }}
           >
             <p className="text-sm text-red-400">{error}</p>
@@ -415,65 +353,40 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
             </button>
           </div>
         )}
+      </div>
 
-        {/* ── MIC BAR ─────────────────────────────────────── */}
-        <div
-          className="flex items-center gap-3 rounded-2xl px-4 py-3"
-          style={{ background: "rgba(21,28,47,0.8)", border: "1px solid rgba(255,255,255,0.06)" }}
+      {/* ── TEXT INPUT BAR (accessibility fallback at bottom) ── */}
+      <div
+        className="mx-5 mb-6 flex items-center gap-3 rounded-2xl px-4 py-3"
+        style={{ background: "rgba(21,28,47,0.8)", border: "1px solid rgba(255,255,255,0.06)" }}
+      >
+        <motion.button
+          onClick={state === "listening" ? stopRecording : startRecording}
+          disabled={state === "greeting" || state === "processing"}
+          className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 focus:outline-none focus:ring-2 focus:ring-[#4F46E5] disabled:opacity-40 ${state === "listening" ? "bg-gradient-to-br from-[#4F46E5] to-[#6366f1]" : "bg-white/10"}`}
+          whileTap={{ scale: 0.9 }}
         >
-          {/* Mic button */}
-          <motion.button
-            onClick={state === "listening" ? stopRecording : startRecording}
-            disabled={state === "processing"}
-            className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 focus:outline-none focus:ring-2 focus:ring-[#4F46E5] disabled:opacity-40 ${state === "listening" ? "bg-gradient-to-br from-[#4F46E5] to-[#6366f1]" : "bg-white/10"}`}
-            whileTap={{ scale: 0.9 }}
-          >
-            {state === "listening" ? (
-              <MicOff size={22} color="#fff" />
-            ) : (
-              <Mic size={22} color={state === "processing" ? "#64748B" : "#fff"} />
-            )}
-          </motion.button>
+          {state === "listening" ? <MicOff size={20} color="#fff" /> : <Mic size={20} color="#fff" />}
+        </motion.button>
 
-          {/* Text input */}
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={state === "listening" ? "Speak now..." : "Type a message..."}
-            className="flex-1 bg-transparent text-sm text-white placeholder-[#64748B] focus:outline-none"
-          />
+        <input
+          ref={inputRef}
+          type="text"
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={state === "listening" ? "Speak now..." : "Type your message..."}
+          className="flex-1 bg-transparent text-sm text-white placeholder-[#64748B] focus:outline-none"
+        />
 
-          {/* Send button */}
-          <button
-            onClick={handleSubmitText}
-            disabled={!inputText.trim() || state === "processing"}
-            className="w-10 h-10 rounded-xl flex items-center justify-center disabled:opacity-30 active:scale-90 transition-transform focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
-            style={{ background: inputText.trim() ? "linear-gradient(135deg,#4F46E5,#6366f1)" : "transparent" }}
-          >
-            <ChevronRight size={18} color="#fff" />
-          </button>
-
-          {/* Action button when ready to navigate */}
-          {state === "result" && intent === "search_flights" && parameters?.offers?.length > 0 && (
-            <button
-              onClick={() => onNavigate("results", { parameters, intent })}
-              className="rounded-xl px-4 py-2 text-xs font-semibold text-white whitespace-nowrap"
-              style={{ background: "linear-gradient(135deg,#22C55E,#16A34A)" }}
-            >
-              Results →
-            </button>
-          )}
-        </div>
-
-        {/* Re-prompt hint after assistant responds */}
-        {state === "result" && !(intent === "search_flights" && parameters?.offers?.length > 0) && (
-          <p className="text-xs text-center text-[#64748B] -mt-2">
-            Tap the mic or type your reply to continue
-          </p>
-        )}
+        <button
+          onClick={handleSubmitText}
+          disabled={!inputText.trim() || state === "greeting" || state === "processing"}
+          className="w-10 h-10 rounded-xl flex items-center justify-center disabled:opacity-30 active:scale-90 transition-transform focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
+          style={{ background: inputText.trim() ? "linear-gradient(135deg,#4F46E5,#6366f1)" : "transparent" }}
+        >
+          <ChevronRight size={18} color="#fff" />
+        </button>
       </div>
     </div>
   );
