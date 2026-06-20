@@ -61,9 +61,9 @@ function VoiceWave({ active, size = "md" }: { active: boolean; size?: "sm" | "md
   );
 }
 
-function MicButton({ size = "lg", active = false, onClick }: { size?: "sm" | "md" | "lg" | "xl" | "2xl"; active?: boolean; onClick?: (e?: React.MouseEvent) => void }) {
-  const dims: Record<string, string> = { sm: "w-14 h-14", md: "w-20 h-20", lg: "w-28 h-28", xl: "w-36 h-36", "2xl": "w-44 h-44" };
-  const iconSize: Record<string, number> = { sm: 20, md: 28, lg: 44, xl: 52, "2xl": 64 };
+function MicButton({ size = "lg", active = false, onClick }: { size?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl"; active?: boolean; onClick?: (e?: React.MouseEvent) => void }) {
+  const dims: Record<string, string> = { sm: "w-14 h-14", md: "w-20 h-20", lg: "w-28 h-28", xl: "w-36 h-36", "2xl": "w-44 h-44", "3xl": "w-52 h-52" };
+  const iconSize: Record<string, number> = { sm: 20, md: 28, lg: 44, xl: 52, "2xl": 64, "3xl": 72 };
   return (
     <motion.button
       onClick={onClick}
@@ -101,6 +101,7 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
   const [error, setError] = useState("");
   const [inputText, setInputText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
 
   const playTts = useCallback(async (text: string) => {
     try {
@@ -119,7 +120,6 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
     setTranscript(text);
     setState("processing");
     setError("");
-
     try {
       const result = await api.voiceCommand(text);
       setIntent(result.intent);
@@ -158,7 +158,6 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
   const recognitionRef = useRef<any>(null);
 
   const startRecording = useCallback(async () => {
-    // Check for browser SpeechRecognition support
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
@@ -169,7 +168,6 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
     }
 
     try {
-      // Request mic permission first
       await navigator.mediaDevices.getUserMedia({ audio: true });
 
       const recognition = new SpeechRecognition();
@@ -182,11 +180,14 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
         const text = event.results[last][0].transcript;
         if (event.results[last].isFinal) {
           setTranscript(text);
-          setState("processing");
           handleVoiceCommand(text);
         } else {
-          // Show interim results live as user speaks
+          // Show interim results LIVE as user speaks
           setTranscript(text);
+          // Auto-scroll to keep latest text visible
+          if (transcriptRef.current) {
+            transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
+          }
         }
       };
 
@@ -202,7 +203,6 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
 
       recognition.onend = () => {
         recognitionRef.current = null;
-        // Only reset to idle if we didn't already transition to processing
         setState(prev => prev === "listening" ? "idle" : prev);
       };
 
@@ -224,7 +224,7 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
   }, []);
 
   return (
-    <div className="min-h-screen" style={{ background: "#0B1020" }}>
+    <div className="min-h-screen flex flex-col" style={{ background: "#0B1020" }}>
       {/* Header */}
       <div className="flex items-center gap-3 px-5 pt-14 pb-4">
         <button
@@ -237,22 +237,23 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
         <h1 className="text-lg font-bold text-white">Voice Assistant</h1>
       </div>
 
-      <div className="px-5 space-y-5 pb-8">
-        {/* Mic area / main interaction */}
+      <div className="flex-1 px-5 space-y-5 pb-8 flex flex-col">
+        {/* Mic area — takes up most of the screen */}
         <GlassCard
-          className={`p-8 text-center transition-all duration-300 ${state === "result" ? "pb-6" : "pb-10"}`}
+          className={`flex-1 p-6 text-center flex flex-col items-center justify-center transition-all duration-300 ${state === "result" ? "pb-4" : ""}`}
           onClick={state === "idle" ? () => startRecording() : undefined}
         >
           {state === "idle" && (
             <motion.div
               initial={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex flex-col items-center gap-5"
+              className="flex flex-col items-center justify-center gap-5 flex-1"
             >
-              <MicButton size="2xl" active={false} onClick={() => startRecording()} />
+              {/* BIG MIC — 3xl = 208px diameter */}
+              <MicButton size="3xl" active={false} onClick={() => startRecording()} />
               <VoiceWave active={false} size="lg" />
-              <p className="text-base font-semibold text-white">Tap to Speak</p>
-              <p className="text-xs text-[#94A3B8] -mt-2">or type below</p>
+              <p className="text-lg font-bold text-white">Tap to Speak</p>
+              <p className="text-sm text-[#94A3B8] -mt-2">Say something like "Book a flight from London to Paris tomorrow"</p>
             </motion.div>
           )}
 
@@ -260,20 +261,30 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="flex flex-col items-center gap-5"
+              className="flex flex-col items-center gap-5 flex-1 w-full"
             >
-              <MicButton size="2xl" active={true} onClick={() => stopRecording()} />
+              <MicButton size="3xl" active={true} onClick={() => stopRecording()} />
               <VoiceWave active={true} size="lg" />
-              <p className="text-base font-semibold text-[#4F46E5]">Listening...</p>
+              <p className="text-lg font-bold text-[#4F46E5]">Listening...</p>
               <p className="text-xs text-[#94A3B8] -mt-2">Tap mic to stop</p>
-              {transcript && (
-                <div
-                  className="w-full rounded-xl p-4 mt-2"
-                  style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.15)" }}
-                >
-                  <p className="text-sm italic text-white/80">"{transcript}"</p>
-                </div>
-              )}
+
+              {/* REAL-TIME TRANSCRIPTION - prominent box below mic */}
+              <div
+                ref={transcriptRef}
+                className="w-full rounded-xl p-5 mt-3 max-h-48 overflow-y-auto"
+                style={{
+                  background: "rgba(79,70,229,0.08)",
+                  border: "1px solid rgba(79,70,229,0.2)",
+                }}
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                {transcript ? (
+                  <p className="text-base italic text-white/90">"{transcript}"</p>
+                ) : (
+                  <p className="text-sm text-[#94A3B8]">Say something...</p>
+                )}
+              </div>
             </motion.div>
           )}
 
@@ -281,17 +292,22 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="flex flex-col items-center gap-5"
+              className="flex flex-col items-center gap-5 flex-1 justify-center"
             >
               <div
-                className="w-28 h-28 rounded-full flex items-center justify-center"
+                className="w-44 h-44 rounded-full flex items-center justify-center"
                 style={{ background: "linear-gradient(135deg,rgba(79,70,229,0.25),rgba(99,102,241,0.15))", border: "2px solid rgba(79,70,229,0.4)" }}
               >
-                <Loader2 size={44} color="#4F46E5" className="animate-spin" />
+                <Loader2 size={64} color="#4F46E5" className="animate-spin" />
               </div>
-              <p className="text-base font-semibold text-white">Thinking...</p>
+              <p className="text-lg font-bold text-white">Processing...</p>
               {transcript && (
-                <p className="text-sm text-[#94A3B8] italic">"{transcript}"</p>
+                <div
+                  className="w-full max-w-md rounded-xl p-4"
+                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}
+                >
+                  <p className="text-base italic text-white/80">"{transcript}"</p>
+                </div>
               )}
             </motion.div>
           )}
@@ -300,22 +316,22 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col items-center gap-4"
+              className="flex flex-col items-center gap-4 flex-1 w-full"
             >
               <div
-                className="w-16 h-16 rounded-full flex items-center justify-center"
+                className="w-20 h-20 rounded-full flex items-center justify-center"
                 style={{ background: "linear-gradient(135deg,rgba(34,197,94,0.2),rgba(34,197,94,0.1))", border: "2px solid rgba(34,197,94,0.3)" }}
               >
-                <Sparkles size={28} color="#22C55E" />
+                <Sparkles size={36} color="#22C55E" />
               </div>
               <p className="text-sm text-[#94A3B8]">You said:</p>
               <p className="text-base font-semibold text-white/90 italic mb-1">"{transcript}"</p>
 
               <div
-                className="w-full rounded-xl p-4 text-left"
+                className="w-full rounded-xl p-5 text-left"
                 style={{ background: "rgba(79,70,229,0.1)", border: "1px solid rgba(79,70,229,0.2)" }}
               >
-                <p className="text-sm leading-relaxed text-white/90">{responseText}</p>
+                <p className="text-base leading-relaxed text-white/90 whitespace-pre-wrap">{responseText}</p>
               </div>
 
               {/* Parameters section */}
@@ -397,7 +413,6 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
             </button>
           </div>
         )}
-
       </div>
     </div>
   );

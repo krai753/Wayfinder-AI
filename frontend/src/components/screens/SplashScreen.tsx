@@ -1,15 +1,13 @@
 /**
  * SplashScreen — first impression.
  *
- * Refactored to feel like a $150k agency build:
- * - Hero brand mark with deep glow + ambient halo
- * - Editorial type scale (massive 6xl+ headline)
- * - "Macrowhitespace" — py-32+ between sections
- * - Spring-eased entrance animations
- * - Reduced-motion respected
- * - Strong focus ring on the CTA
+ * Clean, accessible landing:
+ * - Hero brand mark with deep glow
+ * - "Get Started" text button FIXED at bottom — no animation, no wiggle
+ * - No auto-redirect — user decides when to proceed
  * - Auto-reads welcome on mount
  * - ARIA-live region for screen readers
+ * - Reduced-motion respected
  */
 import { useEffect } from "react";
 import { motion } from "motion/react";
@@ -26,12 +24,10 @@ interface SplashScreenProps {
 
 export function SplashScreen({ navigate }: SplashScreenProps) {
   useEffect(() => {
-    const t = setTimeout(() => navigate("home"), 3000);
     speak({
-      text: "Welcome to Wayfinder AI. Voice first travel for everyone. Tap get started, or wait to continue.",
+      text: "Welcome to Wayfinder AI. Voice first travel for everyone. Tap get started to begin.",
     });
-    return () => clearTimeout(t);
-  }, [navigate]);
+  }, []);
 
   function handleRead() {
     speak({
@@ -48,7 +44,7 @@ export function SplashScreen({ navigate }: SplashScreenProps) {
       <motion.div
         className="absolute pointer-events-none"
         style={{
-          top: "8%",
+          top: "30%",
           left: "50%",
           x: "-50%",
           width: "min(560px, 130vw)",
@@ -63,7 +59,7 @@ export function SplashScreen({ navigate }: SplashScreenProps) {
         aria-hidden="true"
       />
 
-      {/* Eyebrow tag — editorial detail */}
+      {/* Eyebrow tag */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -84,7 +80,7 @@ export function SplashScreen({ navigate }: SplashScreenProps) {
         </span>
       </motion.div>
 
-      {/* Brand mark — geometric, glowing */}
+      {/* Brand mark */}
       <motion.div
         initial={{ opacity: 0, scale: 0.6 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -105,7 +101,7 @@ export function SplashScreen({ navigate }: SplashScreenProps) {
         </div>
       </motion.div>
 
-      {/* Wordmark — massive editorial display */}
+      {/* Wordmark */}
       <motion.h1
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -122,23 +118,12 @@ export function SplashScreen({ navigate }: SplashScreenProps) {
         Wayfinder AI
       </motion.h1>
 
-      {/* Animated voice wave — the signature */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.45, duration: 0.8 }}
-        className="relative z-10 my-10"
-        aria-hidden="true"
-      >
-        <VoiceWave active={true} size="lg" />
-      </motion.div>
-
       {/* Tagline */}
       <motion.p
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        className="relative z-10 text-white/95 mb-3"
+        className="relative z-10 text-white/95 mb-2"
         style={{ ...type.h2, fontWeight: 700, letterSpacing: "-0.02em" }}
       >
         Accessible travel for everyone
@@ -147,19 +132,17 @@ export function SplashScreen({ navigate }: SplashScreenProps) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.6, duration: 0.6 }}
-        className="relative z-10 text-slate-400 max-w-xs mx-auto mb-16"
+        className="relative z-10 text-slate-400 max-w-xs mx-auto"
         style={type.body as any}
       >
-        Powered by Duffel • Built for blind and visually impaired travelers
+        Powered by Duffel · Built for blind and visually impaired travelers
       </motion.p>
 
-      {/* CTAs — Button-in-Button pattern */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.75, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        className="relative z-10 w-full max-w-xs flex flex-col gap-3"
-      >
+      {/* Spacer to push button to bottom */}
+      <div className="flex-1" />
+
+      {/* CTAs — FIXED at bottom, NO motion/animation */}
+      <div className="relative z-10 w-full max-w-xs flex flex-col gap-3 pb-8">
         <Button
           onClick={() => navigate("home")}
           size="hero"
@@ -178,18 +161,7 @@ export function SplashScreen({ navigate }: SplashScreenProps) {
         >
           Read welcome message
         </Button>
-      </motion.div>
-
-      {/* Auto-progress hint */}
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1.2, duration: 0.6 }}
-        className="relative z-10 text-xs uppercase tracking-[0.18em] text-slate-500 mt-12"
-        style={type.eyebrow}
-      >
-        Continuing automatically
-      </motion.p>
+      </div>
     </div>
   );
 }

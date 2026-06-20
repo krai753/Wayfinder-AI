@@ -21,7 +21,7 @@ interface VoiceMicButtonProps {
   state: MicState;
   onClick?: () => void;
   onLongPress?: () => void;
-  size?: "md" | "lg" | "xl";
+  size?: "md" | "lg" | "xl" | "2xl";
   disabled?: boolean;
   /** aria-label override. Otherwise derived from state. */
   ariaLabel?: string;
@@ -62,6 +62,7 @@ export function VoiceMicButton({
     md: { btn: "w-[100px] h-[100px]", icon: 36 },
     lg: { btn: "w-[120px] h-[120px]", icon: 44 },
     xl: { btn: "w-[140px] h-[140px]", icon: 52 },
+    "2xl": { btn: "w-[176px] h-[176px]", icon: 64 },
   };
   const d = dims[size];
 

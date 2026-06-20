@@ -1,26 +1,18 @@
 /**
  * HomeScreen — voice-first home.
  *
- * Refactored to premium quality:
- * - Editorial greeting with massive type hierarchy
- * - Hero mic card with the largest, most atmospheric presence
- *   on the page (140px mic + ambient halo)
- * - Bento-style quick actions (varying card sizes)
- * - Empty state with onboarding CTA
- * - All accessibility preserved
+ * Simpler, cleaner design for accessibility:
+ * - Editorial greeting with user's name
+ * - HUGE mic button — the primary action, no distractions
+ * - No Quick Actions — just tap mic to speak
+ * - Next trip card (if any)
+ * - Backend status indicator
  */
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import {
-  Plane,
-  Bookmark,
-  BarChart3,
-  Sparkles,
-  ArrowRight,
-} from "lucide-react";
+import { ArrowRight, Plane } from "lucide-react";
 import { api } from "../../services/api";
 import { useUser } from "../../hooks/useUser";
-import { useWizard } from "../../hooks/useWizard";
 import { speak } from "../../hooks/useSpeech";
 import { Card } from "../ui/Card";
 import { VoiceMicButton, MicState } from "../ui/VoiceMicButton";
@@ -35,7 +27,6 @@ interface HomeScreenProps {
 
 export function HomeScreen({ navigate }: HomeScreenProps) {
   const { profile, trips } = useUser();
-  const { reset } = useWizard();
   const [backendStatus, setBackendStatus] = useState<
     "checking" | "online" | "offline"
   >("checking");
@@ -90,7 +81,7 @@ export function HomeScreen({ navigate }: HomeScreenProps) {
       className="min-h-[100dvh] pb-32 relative"
       style={{ background: tokens.color.bg.deep }}
     >
-      {/* Header — editorial greeting */}
+      {/* Header */}
       <div
         className="sticky top-0 z-20 px-5 pt-5 pb-3"
         style={{
@@ -103,10 +94,7 @@ export function HomeScreen({ navigate }: HomeScreenProps) {
       >
         <div className="flex items-start justify-between">
           <div>
-            <p
-              className="text-slate-400 mb-1"
-              style={type.eyebrow}
-            >
+            <p className="text-slate-400 mb-1" style={type.eyebrow}>
               Good day
             </p>
             <h1
@@ -151,19 +139,20 @@ export function HomeScreen({ navigate }: HomeScreenProps) {
         </div>
       </div>
 
-      <div className="px-5 pt-6 space-y-6">
-        {/* HERO — Mic card with atmospheric halo */}
+      <div className="px-5 pt-10 space-y-6">
+        {/* HERO — Giant mic button fills the page */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          className="flex flex-col items-center justify-center min-h-[50vh]"
         >
           <Card
             variant="raised"
             padding="xl"
             onClick={() => navigate("voice")}
             ariaLabel="Open voice assistant to book a flight by speaking"
-            className="relative overflow-visible"
+            className="relative overflow-visible w-full"
           >
             {/* Ambient halo behind the mic */}
             <div
@@ -172,39 +161,33 @@ export function HomeScreen({ navigate }: HomeScreenProps) {
                 top: "30%",
                 left: "50%",
                 transform: "translate(-50%, -50%)",
-                width: "300px",
-                height: "300px",
+                width: "350px",
+                height: "350px",
                 background:
-                  "radial-gradient(circle, rgba(99,102,241,0.18) 0%, rgba(34,197,94,0.10) 40%, transparent 70%)",
-                filter: "blur(30px)",
+                  "radial-gradient(circle, rgba(99,102,241,0.25) 0%, rgba(34,197,94,0.12) 40%, transparent 70%)",
+                filter: "blur(40px)",
               }}
               aria-hidden="true"
             />
 
-            <div className="relative flex flex-col items-center text-center">
-              <p className="text-slate-400 mb-2" style={type.eyebrow}>
+            <div className="relative flex flex-col items-center text-center py-4">
+              <p className="text-indigo-300 mb-3 text-xs font-semibold tracking-[0.15em] uppercase">
                 Voice booking
               </p>
               <p
-                className="text-white mb-8"
-                style={{ ...type.h3, fontWeight: 700, letterSpacing: "-0.015em" }}
+                className="text-white mb-6"
+                style={{ ...type.h2, fontWeight: 700, letterSpacing: "-0.015em" }}
               >
                 {micState === "listening" ? "Opening…" : "Tap to speak"}
               </p>
-              <div className="mb-6">
+              <div className="mb-4 scale-125">
                 <VoiceMicButton
                   state={micState}
                   onClick={handleMicTap}
-                  size="xl"
+                  size="2xl"
                 />
               </div>
-              <VoiceWave active={micState === "listening"} size="md" />
-              <p
-                className="text-slate-400 mt-5 max-w-xs"
-                style={type.bodySm as any}
-              >
-                Try: "Book a flight from London to Paris tomorrow"
-              </p>
+              <VoiceWave active={micState === "listening"} size="lg" />
             </div>
           </Card>
         </motion.div>
@@ -266,94 +249,7 @@ export function HomeScreen({ navigate }: HomeScreenProps) {
             </Card>
           </motion.div>
         )}
-
-        {/* Quick actions — Bento grid */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        >
-          <h2 className="text-white mb-3" style={type.eyebrow}>
-            Quick actions
-          </h2>
-          <div className="grid grid-cols-2 gap-3">
-            <QuickAction
-              icon={<Plane size={20} className="text-indigo-300" aria-hidden="true" />}
-              label="Book flight"
-              sublabel="By voice or text"
-              onClick={() => {
-                reset();
-                navigate("origin");
-              }}
-              variant="tinted"
-            />
-            <QuickAction
-              icon={<Bookmark size={20} className="text-emerald-300" aria-hidden="true" />}
-              label="My trips"
-              sublabel={`${trips.length} total`}
-              onClick={() => navigate("bookings")}
-            />
-            <QuickAction
-              icon={<BarChart3 size={20} className="text-amber-300" aria-hidden="true" />}
-              label="Travel stats"
-              sublabel="Insights"
-              onClick={() => navigate("portfolio")}
-            />
-            <QuickAction
-              icon={<Sparkles size={20} className="text-pink-300" aria-hidden="true" />}
-              label="AI assistant"
-              sublabel="Always here"
-              onClick={() => navigate("assistant")}
-            />
-          </div>
-        </motion.div>
       </div>
     </div>
-  );
-}
-
-function QuickAction({
-  icon,
-  label,
-  sublabel,
-  onClick,
-  variant = "default",
-}: {
-  icon: React.ReactNode;
-  label: string;
-  sublabel?: string;
-  onClick: () => void;
-  variant?: "default" | "tinted";
-}) {
-  return (
-    <Card
-      variant={variant}
-      padding="md"
-      onClick={onClick}
-      ariaLabel={sublabel ? `${label}. ${sublabel}` : label}
-    >
-      <div className="flex flex-col gap-3">
-        <div
-          className="w-12 h-12 rounded-xl flex items-center justify-center"
-          style={{
-            background: "rgba(255, 255, 255, 0.06)",
-            border: "1px solid rgba(255, 255, 255, 0.06)",
-          }}
-          aria-hidden="true"
-        >
-          {icon}
-        </div>
-        <div>
-          <p className="text-white" style={{ ...type.bodyLg, fontWeight: 700, letterSpacing: "-0.01em" }}>
-            {label}
-          </p>
-          {sublabel && (
-            <p className="text-slate-400" style={type.caption as any}>
-              {sublabel}
-            </p>
-          )}
-        </div>
-      </div>
-    </Card>
   );
 }
