@@ -219,7 +219,7 @@ function SplashScreen({ navigate }: { navigate: (s: Screen) => void }) {
           <p className="text-sm font-medium tracking-widest uppercase text-indigo-400">Voice · Travel · Accessible</p>
         </motion.div>
 
-        <div className="mt-12 mb-8">
+        <div className="mt-12 mb-8 h-[120px] flex items-center justify-center">
           <VoiceWave active={true} size="lg" />
         </div>
 
