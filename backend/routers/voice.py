@@ -220,7 +220,14 @@ async def voice_command(req: VoiceCommandRequest):
 
     # ── CONFIDENCE CHECK — route to CS if below 95% ────────────
     confidence = float(params.get("confidence", 1.0))
-    if confidence < 0.95 and intent in ("search_flights", "search_with_budget", "provide_name"):
+    # Skip confidence check if in booking collection mode (multi-turn context)
+    in_collection_mode = False
+    if req.session_id:
+        session = get_wizard_session(req.session_id)
+        if session and session.get("current_step") == "collecting_fields":
+            in_collection_mode = True
+
+    if not in_collection_mode and confidence < 0.95 and intent in ("search_flights", "search_with_budget", "provide_name"):
         logger.warning(f"Low confidence ({confidence}) — escalating to CS")
         return VoiceCommandResponse(
             intent="cs_escalation",
@@ -235,7 +242,7 @@ async def voice_command(req: VoiceCommandRequest):
     logger.info(f"Parsed command: intent={intent}, confidence={confidence}, params={params}")
 
     # 3. Booking info collector — if we're collecting fields, save & check
-    if req.session_id and intent in ("search_flights", "provide_name"):
+    if req.session_id and (intent in ("search_flights", "provide_name", "unknown") or in_collection_mode):
         session = get_wizard_session(req.session_id)
         if session and session.get("current_step") == "collecting_fields":
             # We're in booking info collection mode — save what we got
