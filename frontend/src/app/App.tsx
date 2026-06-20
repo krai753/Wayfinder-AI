@@ -195,45 +195,44 @@ function BottomNav({ current, navigate }: { current: Screen; navigate: (s: Scree
 }
 
 function SplashScreen({ navigate }: { navigate: (s: Screen) => void }) {
+  useEffect(() => {
+    const timer = setTimeout(() => navigate("voice"), 2000);
+    return () => clearTimeout(timer);
+  }, [navigate]);
+
   return (
     <div
-      className="flex flex-col min-h-screen px-8"
+      className="flex flex-col min-h-screen px-8 items-center justify-center text-center"
       style={{ background: "radial-gradient(ellipse at center, #1a1f3e 0%, #0B1020 60%)" }}
     >
-      {/* Top section — centered content */}
-      <div className="flex-1 flex flex-col items-center justify-center text-center">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.7 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.8 }}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.7 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.8 }}
+      >
+        <div
+          className="w-28 h-28 rounded-3xl flex items-center justify-center mx-auto mb-6"
+          style={{ background: "linear-gradient(135deg,#4F46E5,#6366f1)", boxShadow: "0 0 60px rgba(79,70,229,0.4)" }}
         >
-          <div
-            className="w-28 h-28 rounded-3xl flex items-center justify-center mx-auto mb-6"
-            style={{ background: "linear-gradient(135deg,#4F46E5,#6366f1)", boxShadow: "0 0 60px rgba(79,70,229,0.4)" }}
-          >
-            <Navigation size={52} color="#fff" />
-          </div>
-          <h1 className="text-4xl font-extrabold text-white mb-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-            Wayfinder AI
-          </h1>
-          <p className="text-sm font-medium tracking-widest uppercase text-indigo-400">Voice · Travel · Accessible</p>
-        </motion.div>
-
-        <div className="mt-12 mb-8 h-[120px] flex items-center justify-center">
-          <VoiceWave active={true} size="lg" />
+          <Navigation size={52} color="#fff" />
         </div>
+        <h1 className="text-4xl font-extrabold text-white mb-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+          Wayfinder AI
+        </h1>
+        <p className="text-sm font-medium tracking-widest uppercase text-indigo-400">Voice · Travel · Accessible</p>
+      </motion.div>
 
-        <p className="text-xl font-semibold text-white/90 mb-2">
-          Accessible Travel for Everyone
-        </p>
+      <div className="mt-12 mb-8 h-[120px] flex items-center justify-center">
+        <VoiceWave active={true} size="lg" />
       </div>
 
-      {/* Bottom section — fixed button */}
-      <div className="pb-12 w-full max-w-xs mx-auto">
-        <PrimaryButton onClick={() => navigate("home")} className="w-full py-5 text-lg" icon={<ArrowRight size={22} />}>
-          Get Started
-        </PrimaryButton>
-      </div>
+      <p className="text-xl font-semibold text-white/90 mb-6">
+        Accessible Travel for Everyone
+      </p>
+
+      <PrimaryButton onClick={() => navigate("voice")} className="w-full max-w-xs py-5 text-lg" icon={<ArrowRight size={22} />}>
+        Get Started
+      </PrimaryButton>
     </div>
   );
 }
