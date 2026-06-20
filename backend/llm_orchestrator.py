@@ -112,11 +112,20 @@ def _resolve_date(text: str) -> str:
     text = text.lower().strip()
     today = datetime.now()
 
-    if text == "tomorrow":
+    if "tomorrow" in text:
         return (today + timedelta(days=1)).strftime("%Y-%m-%d")
+    if "today" in text and text != "today":
+        # Only match standalone "today" or "today" in context
+        found = False
+        for w in text.split():
+            if w.strip(".,!?") == "today":
+                found = True
+                break
+        if found and not any(w in text for w in ["today's", "todays"]):
+            return today.strftime("%Y-%m-%d")
     if text == "today":
         return today.strftime("%Y-%m-%d")
-    if text == "day after tomorrow":
+    if "day after tomorrow" in text:
         return (today + timedelta(days=2)).strftime("%Y-%m-%d")
 
     # "next [weekday]"
