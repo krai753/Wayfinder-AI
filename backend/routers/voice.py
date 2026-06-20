@@ -13,6 +13,18 @@ from models import VoiceCommandRequest, VoiceCommandResponse
 from llm_orchestrator import llm
 from voice_engine import voice
 from duffel_client import duffel
+
+# ── Translation helper for bilingual responses ──
+
+def _translate_response(text: str, user_lang: str) -> str:
+    """Translate response text to user's language if needed."""
+    if not user_lang or user_lang == "en":
+        return text
+    try:
+        from deep_translator import GoogleTranslator
+        return GoogleTranslator(source="en", target=user_lang).translate(text)
+    except Exception:
+        return text
 from airport_data import search_airports, get_airport
 from database import create_session, get_bookings, get_bookings_by_user, get_portfolio_stats, get_session as get_db_session, save_booking, save_offer
 from wizard_manager import create_wizard_session, get_wizard_session, process_step
@@ -206,11 +218,13 @@ async def _handle_search_flights(params: dict, response_text: str, session_id: s
     dep_date = _resolve_date(params.get("date", ""))
     passengers = params.get("passengers", 1)
 
+    user_lang = params.get("user_lang", "")
+
     if not origin or not destination or not dep_date:
         return VoiceCommandResponse(
             intent="search_flights",
             parameters=params,
-            response_text="I need an origin, destination, and date to search for flights.",
+            response_text=_translate_response("I need an origin, destination, and date to search for flights.", user_lang),
         )
 
     # Ensure we have valid airports
@@ -218,13 +232,13 @@ async def _handle_search_flights(params: dict, response_text: str, session_id: s
         return VoiceCommandResponse(
             intent="search_flights",
             parameters=params,
-            response_text=f"Sorry, I couldn't find the airport for '{origin}'. Could you try a different city?",
+            response_text=_translate_response(f"Sorry, I could not find the airport for {origin}. Could you try a different city?", user_lang),
         )
     if not get_airport(destination):
         return VoiceCommandResponse(
             intent="search_flights",
             parameters=params,
-            response_text=f"Sorry, I couldn't find the airport for '{destination}'. Could you try a different city?",
+            response_text=_translate_response(f"Sorry, I could not find the airport for {destination}. Could you try a different city?", user_lang),
         )
 
     raw = await duffel.search_flights(
@@ -569,12 +583,13 @@ async def _handle_search_with_budget(params: dict, response_text: str, session_i
     dep_date = _resolve_date(params.get("date", ""))
     max_price = params.get("max_price", 0)
     passengers = params.get("passengers", 1)
+    user_lang = params.get("user_lang", "")
 
     if not origin or not destination or not dep_date or not max_price:
         return VoiceCommandResponse(
             intent="search_with_budget",
             parameters=params,
-            response_text="I need an origin, destination, date, and maximum price to search within a budget.",
+            response_text=_translate_response("I need an origin, destination, date, and maximum price to search within a budget.", user_lang),
         )
 
     # Validate
@@ -582,13 +597,13 @@ async def _handle_search_with_budget(params: dict, response_text: str, session_i
         return VoiceCommandResponse(
             intent="search_with_budget",
             parameters=params,
-            response_text=f"Sorry, I couldn't find the airport for '{origin}'.",
+            response_text=_translate_response(f"Sorry, I could not find the airport for {origin}.", user_lang),
         )
     if not get_airport(destination):
         return VoiceCommandResponse(
             intent="search_with_budget",
             parameters=params,
-            response_text=f"Sorry, I couldn't find the airport for '{destination}'.",
+            response_text=_translate_response(f"Sorry, I could not find the airport for {destination}.", user_lang),
         )
 
     raw = await duffel.search_flights(

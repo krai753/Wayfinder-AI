@@ -61,9 +61,9 @@ function VoiceWave({ active, size = "md" }: { active: boolean; size?: "sm" | "md
   );
 }
 
-function MicButton({ size = "lg", active = false, onClick }: { size?: "sm" | "md" | "lg"; active?: boolean; onClick?: (e?: React.MouseEvent) => void }) {
-  const dims: Record<string, string> = { sm: "w-14 h-14", md: "w-20 h-20", lg: "w-28 h-28" };
-  const iconSize: Record<string, number> = { sm: 20, md: 28, lg: 44 };
+function MicButton({ size = "lg", active = false, onClick }: { size?: "sm" | "md" | "lg" | "xl" | "2xl"; active?: boolean; onClick?: (e?: React.MouseEvent) => void }) {
+  const dims: Record<string, string> = { sm: "w-14 h-14", md: "w-20 h-20", lg: "w-28 h-28", xl: "w-36 h-36", "2xl": "w-44 h-44" };
+  const iconSize: Record<string, number> = { sm: 20, md: 28, lg: 44, xl: 52, "2xl": 64 };
   return (
     <motion.button
       onClick={onClick}
@@ -249,8 +249,8 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
               exit={{ opacity: 0 }}
               className="flex flex-col items-center gap-5"
             >
-              <MicButton size="lg" active={false} onClick={() => startRecording()} />
-              <VoiceWave active={false} size="md" />
+              <MicButton size="2xl" active={false} onClick={() => startRecording()} />
+              <VoiceWave active={false} size="lg" />
               <p className="text-base font-semibold text-white">Tap to Speak</p>
               <p className="text-xs text-[#94A3B8] -mt-2">or type below</p>
             </motion.div>
@@ -262,10 +262,18 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
               animate={{ opacity: 1, scale: 1 }}
               className="flex flex-col items-center gap-5"
             >
-              <MicButton size="lg" active={true} onClick={() => stopRecording()} />
-              <VoiceWave active={true} size="md" />
+              <MicButton size="2xl" active={true} onClick={() => stopRecording()} />
+              <VoiceWave active={true} size="lg" />
               <p className="text-base font-semibold text-[#4F46E5]">Listening...</p>
               <p className="text-xs text-[#94A3B8] -mt-2">Tap mic to stop</p>
+              {transcript && (
+                <div
+                  className="w-full rounded-xl p-4 mt-2"
+                  style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.15)" }}
+                >
+                  <p className="text-sm italic text-white/80">"{transcript}"</p>
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -390,31 +398,6 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
           </div>
         )}
 
-        {/* Suggestions */}
-        {state === "idle" && (
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-[#94A3B8] uppercase tracking-wider px-1">Try saying</p>
-            <div className="flex flex-wrap gap-2">
-              {[
-                "Book a flight from LHR to JFK",
-                "I want to fly from London to New York",
-                "Search flights from JFK to LAX",
-              ].map((suggestion) => (
-                <button
-                  key={suggestion}
-                  onClick={() => {
-                    setInputText(suggestion);
-                    handleVoiceCommand(suggestion);
-                  }}
-                  className="text-xs rounded-full px-3 py-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
-                  style={{ background: "rgba(79,70,229,0.1)", color: "#A5B4FC", border: "1px solid rgba(79,70,229,0.2)" }}
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

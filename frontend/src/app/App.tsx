@@ -125,9 +125,9 @@ function VoiceWave({ active, size = "md" }: { active: boolean; size?: "sm" | "md
   );
 }
 
-function MicButton({ size = "lg", active = false, onClick }: { size?: "sm" | "md" | "lg"; active?: boolean; onClick?: (e?: React.MouseEvent) => void }) {
-  const dims: Record<string, string> = { sm: "w-14 h-14", md: "w-20 h-20", lg: "w-28 h-28" };
-  const iconSize: Record<string, number> = { sm: 20, md: 28, lg: 44 };
+function MicButton({ size = "lg", active = false, onClick }: { size?: "sm" | "md" | "lg" | "xl" | "2xl"; active?: boolean; onClick?: (e?: React.MouseEvent) => void }) {
+  const dims: Record<string, string> = { sm: "w-14 h-14", md: "w-20 h-20", lg: "w-28 h-28", xl: "w-36 h-36", "2xl": "w-44 h-44" };
+  const iconSize: Record<string, number> = { sm: 20, md: 28, lg: 44, xl: 52, "2xl": 64 };
   return (
     <motion.button
       onClick={onClick}
@@ -191,69 +191,49 @@ function BottomNav({ current, navigate }: { current: Screen; navigate: (s: Scree
         })}
       </div>
     </div>
-  );
-}
-
 function SplashScreen({ navigate }: { navigate: (s: Screen) => void }) {
-  useEffect(() => {
-    const t = setTimeout(() => navigate("home"), 3000);
-    return () => clearTimeout(t);
-  }, [navigate]);
-
   return (
     <div
-      className="flex flex-col items-center justify-center min-h-screen px-8 text-center"
+      className="flex flex-col min-h-screen px-8"
       style={{ background: "radial-gradient(ellipse at center, #1a1f3e 0%, #0B1020 60%)" }}
     >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.7 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.8 }}
-      >
-        <div
-          className="w-24 h-24 rounded-3xl flex items-center justify-center mx-auto mb-6"
-          style={{ background: "linear-gradient(135deg,#4F46E5,#6366f1)", boxShadow: "0 0 60px rgba(79,70,229,0.4)" }}
+      {/* Top section — centered content */}
+      <div className="flex-1 flex flex-col items-center justify-center text-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.7 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.8 }}
         >
-          <Navigation size={48} color="#fff" />
+          <div
+            className="w-28 h-28 rounded-3xl flex items-center justify-center mx-auto mb-6"
+            style={{ background: "linear-gradient(135deg,#4F46E5,#6366f1)", boxShadow: "0 0 60px rgba(79,70,229,0.4)" }}
+          >
+            <Navigation size={52} color="#fff" />
+          </div>
+          <h1 className="text-4xl font-extrabold text-white mb-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+            Wayfinder AI
+          </h1>
+          <p className="text-sm font-medium tracking-widest uppercase text-indigo-400">Voice · Travel · Accessible</p>
+        </motion.div>
+
+        <div className="mt-12 mb-8">
+          <VoiceWave active={true} size="lg" />
         </div>
-        <h1 className="text-4xl font-extrabold text-white mb-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-          Wayfinder AI
-        </h1>
-        <p className="text-sm font-medium tracking-widest uppercase text-indigo-400">Voice · Travel · Accessible</p>
-      </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-        className="mb-12 mt-12"
-      >
-        <VoiceWave active={true} size="lg" />
-      </motion.div>
+        <p className="text-xl font-semibold text-white/90 mb-2">
+          Accessible Travel for Everyone
+        </p>
+      </div>
 
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.8 }}
-        className="text-xl font-semibold text-white/90 mb-2"
-      >
-        Accessible Travel for Everyone
-      </motion.p>
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1.2 }}
-        className="w-full max-w-xs mt-12"
-      >
-        <PrimaryButton onClick={() => navigate("home")} className="w-full" icon={<ArrowRight size={20} />}>
+      {/* Bottom section — fixed button */}
+      <div className="pb-12 w-full max-w-xs mx-auto">
+        <PrimaryButton onClick={() => navigate("home")} className="w-full py-5 text-lg" icon={<ArrowRight size={22} />}>
           Get Started
         </PrimaryButton>
-      </motion.div>
+      </div>
     </div>
   );
 }
-
 function HomeScreen({ navigate }: { navigate: (s: Screen) => void }) {
   const [micActive, setMicActive] = useState(false);
   const [backendStatus, setBackendStatus] = useState<"checking" | "online" | "offline">("checking");
@@ -267,58 +247,34 @@ function HomeScreen({ navigate }: { navigate: (s: Screen) => void }) {
   }, []);
 
   return (
-    <div className="min-h-screen pb-28" style={{ background: "#0B1020" }}>
-      <div className="px-5 pt-14 pb-8">
-        <div className="flex items-center justify-end mb-4">
-          <div className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium"
+    <div className="min-h-screen flex flex-col" style={{ background: "#0B1020" }}>
+      {/* Status badge */}
+      <div className="flex items-center justify-end px-5 pt-14 pb-2">
+        <div className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium"
+          style={{
+            background: backendStatus === "online" ? "rgba(34,197,94,0.12)" : backendStatus === "offline" ? "rgba(239,68,68,0.12)" : "rgba(148,163,184,0.12)",
+            color: backendStatus === "online" ? "#22C55E" : backendStatus === "offline" ? "#EF4444" : "#94A3B8",
+            border: `1px solid ${backendStatus === "online" ? "rgba(34,197,94,0.2)" : backendStatus === "offline" ? "rgba(239,68,68,0.2)" : "rgba(148,163,184,0.2)"}`,
+          }}
+        >
+          <span className="w-1.5 h-1.5 rounded-full"
             style={{
-              background: backendStatus === "online" ? "rgba(34,197,94,0.12)" : backendStatus === "offline" ? "rgba(239,68,68,0.12)" : "rgba(148,163,184,0.12)",
-              color: backendStatus === "online" ? "#22C55E" : backendStatus === "offline" ? "#EF4444" : "#94A3B8",
-              border: `1px solid ${backendStatus === "online" ? "rgba(34,197,94,0.2)" : backendStatus === "offline" ? "rgba(239,68,68,0.2)" : "rgba(148,163,184,0.2)"}`,
+              background: backendStatus === "online" ? "#22C55E" : backendStatus === "offline" ? "#EF4444" : "#94A3B8",
+              boxShadow: backendStatus === "online" ? "0 0 6px #22C55E" : "none",
             }}
-          >
-            <span className="w-1.5 h-1.5 rounded-full"
-              style={{
-                background: backendStatus === "online" ? "#22C55E" : backendStatus === "offline" ? "#EF4444" : "#94A3B8",
-                boxShadow: backendStatus === "online" ? "0 0 6px #22C55E" : "none",
-              }}
-            />
-            {backendStatus === "checking" ? "Checking..." : backendStatus === "online" ? "Backend Connected" : "Backend Offline"}
-          </div>
+          />
+          {backendStatus === "checking" ? "Checking..." : backendStatus === "online" ? "Backend Connected" : "Backend Offline"}
         </div>
-        <div className="mb-6">
-          <p className="text-sm text-[#94A3B8] mb-0.5">Good morning,</p>
-          <h1 className="text-2xl font-extrabold text-white">Wayfinder AI</h1>
-        </div>
-
-        <GlassCard className="p-6 text-center" onClick={() => navigate("voice")}>
-          <p className="text-sm text-[#94A3B8] mb-5">Tap to start voice booking</p>
-          <div className="flex justify-center mb-5">
-            <MicButton size="lg" active={micActive} />
-          </div>
-          <VoiceWave active={false} size="md" />
-          <p className="text-base font-semibold text-white mt-4">Start Flight Booking</p>
-        </GlassCard>
       </div>
 
-      <div className="px-5 space-y-4">
-        <div>
-          <h2 className="text-sm font-semibold text-[#94A3B8] uppercase mb-3">Quick Actions</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <GlassCard className="p-4 flex items-center gap-3" onClick={() => navigate("voice")}>
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "rgba(79,70,229,0.2)" }}>
-                <span style={{ color: "#4F46E5" }}><Plane size={20} /></span>
-              </div>
-              <span className="text-sm font-semibold text-white">Book Flight</span>
-            </GlassCard>
-            <GlassCard className="p-4 flex items-center gap-3" onClick={() => navigate("bookings")}>
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "rgba(79,70,229,0.2)" }}>
-                <span style={{ color: "#4F46E5" }}><Bookmark size={20} /></span>
-              </div>
-              <span className="text-sm font-semibold text-white">My Trips</span>
-            </GlassCard>
-          </div>
+      {/* Main content — massive mic centered */}
+      <div className="flex-1 flex flex-col items-center justify-center px-5 -mt-10">
+        <h1 className="text-3xl font-extrabold text-white mb-2 text-center">Wayfinder AI</h1>
+        <p className="text-sm text-[#94A3B8] mb-10 text-center">Tap the mic and start speaking</p>
+        <div className="flex justify-center mb-6" onClick={() => navigate("voice")}>
+          <MicButton size="2xl" active={micActive} />
         </div>
+        <VoiceWave active={false} size="lg" />
       </div>
     </div>
   );
