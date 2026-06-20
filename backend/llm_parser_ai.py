@@ -145,27 +145,13 @@ class AIParser:
         return None
 
     async def _call_llm(self, system_prompt: str, user_prompt: str, api_key: str) -> Optional[dict]:
-        """Call the LLM API and parse the response."""
+        """Call the LLM API and parse the response. Retries once if empty."""
         provider = settings.ai_parser_provider
         # Hardcoded to DeepSeek V4 Flash via OpenRouter — do not change
         model = "deepseek/deepseek-v4-flash"
 
-        if provider == "deepseek":
-            url = "https://api.deepseek.com/v1/chat/completions"
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            }
-        elif provider == "openrouter":
-            url = "https://openrouter.ai/api/v1/chat/completions"
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://wayfinder.app",
-                "X-Title": "Wayfinder AI",
-            }
-        else:
-            logger.warning(f"Unknown AI parser provider: {provider}")
+        url, headers = self._build_request(provider, api_key)
+        if not url:
             return None
 
         body = {
@@ -174,57 +160,77 @@ class AIParser:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            "temperature": 0.1,
-            "max_tokens": 300,
+            "temperature": 0.3,
+            "max_tokens": 350,
         }
 
         client = await self._get_client()
 
-        try:
-            resp = await client.post(url, json=body, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
+        # Try up to 2 times
+        for attempt in range(2):
+            try:
+                resp = await client.post(url, json=body, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
 
-            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-            if not content:
-                logger.warning("LLM returned empty response")
+                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                if not content:
+                    logger.warning(f"LLM returned empty (attempt {attempt + 1})")
+                    if attempt == 0:
+                        continue  # Retry once
+                    return None
+
+                # Strip markdown code blocks if present
+                content = content.strip()
+                if content.startswith("```"):
+                    content = re.sub(r"^```(?:json)?\s*", "", content)
+                    content = re.sub(r"\s*```$", "", content)
+
+                parsed = json.loads(content)
+                intent = parsed.get("intent", "help")
+                params = parsed.get("parameters", {})
+                response_text = parsed.get("response_text", "")
+
+                # Normalize position values
+                if intent == "select_flight" and params.get("position"):
+                    pos_map = {"1st": "first", "2nd": "second", "3rd": "third",
+                               "4th": "fourth", "5th": "fifth", "1": "first",
+                               "2": "second", "3": "third", "4": "fourth", "5": "fifth"}
+                    pos = str(params["position"])
+                    if pos in pos_map:
+                        params["position"] = pos_map[pos]
+
+                logger.info(f"AI parser: intent={intent}, params={params}")
+                return {
+                    "intent": intent,
+                    "parameters": {**params, "user_lang": params.get("user_lang", "en")},
+                    "response_text": response_text,
+                }
+
+            except (httpx.HTTPStatusError, httpx.RequestError, json.JSONDecodeError, KeyError) as e:
+                logger.warning(f"LLM call failed (attempt {attempt + 1}): {type(e).__name__}")
+                if attempt == 0:
+                    continue  # Retry once
                 return None
 
-            # Strip markdown code blocks if present
-            content = content.strip()
-            if content.startswith("```"):
-                content = re.sub(r"^```(?:json)?\s*", "", content)
-                content = re.sub(r"\s*```$", "", content)
+        return None
 
-            parsed = json.loads(content)
-            intent = parsed.get("intent", "help")
-            params = parsed.get("parameters", {})
-            response_text = parsed.get("response_text", "")
-
-            # Normalize: if position is a digit, convert to match voice_router expectations
-            if intent == "select_flight" and params.get("position"):
-                pos = str(params["position"])
-                # Map "1st" → "first", "2nd" → "second" etc.
-                pos_map = {"1st": "first", "2nd": "second", "3rd": "third",
-                           "4th": "fourth", "5th": "fifth", "1": "first",
-                           "2": "second", "3": "third", "4": "fourth", "5": "fifth"}
-                if pos in pos_map:
-                    params["position"] = pos_map[pos]
-
-            logger.info(f"AI parser: intent={intent}, params={params}")
-
-            return {
-                "intent": intent,
-                "parameters": {**params, "user_lang": params.get("user_lang", "en")},
-                "response_text": response_text,
+    def _build_request(self, provider: str, api_key: str):
+        """Build URL and headers for the LLM provider."""
+        if provider == "deepseek":
+            return "https://api.deepseek.com/v1/chat/completions", {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
             }
-
-        except httpx.HTTPStatusError as e:
-            logger.error(f"LLM API error ({provider}): {e.response.status_code} - {e.response.text[:200]}")
-            return None
-        except (httpx.RequestError, json.JSONDecodeError, KeyError) as e:
-            logger.error(f"LLM call failed: {type(e).__name__}: {e}")
-            return None
+        elif provider == "openrouter":
+            return "https://openrouter.ai/api/v1/chat/completions", {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://wayfinder.app",
+                "X-Title": "Wayfinder AI",
+            }
+        logger.warning(f"Unknown AI parser provider: {provider}")
+        return None, None
 
 
 # Singleton

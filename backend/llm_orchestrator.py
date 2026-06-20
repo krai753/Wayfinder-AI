@@ -77,6 +77,16 @@ CITY_TO_IATA = {
     "nashville": "BNA", "austin": "AUS", "san diego": "SAN", "honolulu": "HNL",
     "osaka": "KIX", "kansai": "KIX", "fukuoka": "FUK", "nagoya": "NGO",
     "sapporo": "CTS", "taipei": "TPE", "taoyuan": "TPE",
+    # Country names → primary international airports
+    "japan": "NRT", "india": "DEL", "china": "PEK", "thailand": "BKK",
+    "vietnam": "SGN", "south korea": "ICN", "korea": "ICN",
+    "united kingdom": "LHR", "uk": "LHR", "england": "LHR",
+    "france": "CDG", "germany": "FRA", "italy": "FCO",
+    "spain": "MAD", "netherlands": "AMS", "switzerland": "ZRH",
+    "australia": "SYD", "brazil": "GRU", "canada": "YYZ",
+    "united arab emirates": "DXB", "uae": "DXB", "qatar": "DOH",
+    "turkey": "IST", "egypt": "CAI", "south africa": "JNB",
+    "russia": "SVO", "mexico": "MEX", "argentina": "EZE",
 }
 
 MONTH_NAMES = {
