@@ -83,7 +83,7 @@ Always include a "confidence" field (0.0 to 1.0) in parameters that rates how co
 - Set confidence HIGH (0.95+) if the user clearly stated origin, destination, and date with no ambiguity
 
 Respond ONLY with valid JSON (no markdown, no backticks):
-{"intent": "...", "parameters": {...}, "response_text": "..."}"""
+{{"intent": "...", "parameters": {{...}}, "response_text": "..."}}"""
 
 
 class AIParser:
