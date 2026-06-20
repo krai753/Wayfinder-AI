@@ -661,7 +661,7 @@ async def _handle_search_with_budget(params: dict, response_text: str, session_i
 # ── TEXT-TO-SPEECH ────────────────────────────────────────────────
 
 
-@router.post("/speak")
+@router.get("/speak")
 async def voice_speak(text: str = Query(..., description="Text to convert to speech")):
     """
     Convert text to speech audio file.
