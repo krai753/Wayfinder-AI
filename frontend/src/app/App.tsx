@@ -25,6 +25,7 @@ import RescheduleScreen from "../components/screens/RescheduleScreen";
 import PortfolioScreen from "../components/screens/PortfolioScreen";
 
 import type { FlightOffer, BookingResult } from "../types";
+import { api } from "../services/api";
 
 // ── SCREEN TYPES ────────────────────────────────────────────────
 
@@ -319,8 +320,16 @@ export default function App() {
     navigate("results");
   };
 
-  const goToPassenger = (flight: FlightOffer) => {
+  const goToPassenger = async (flight: FlightOffer) => {
     updateState({ selectedFlight: flight });
+    // Save selected offer to wizard session so booking can proceed
+    if (state.sessionId && flight.id) {
+      try {
+        await api.wizardSelectFlight(state.sessionId, flight.id);
+      } catch (e) {
+        console.error("Failed to select flight in wizard:", e);
+      }
+    }
     navigate("passenger");
   };
 
@@ -369,7 +378,14 @@ export default function App() {
           <VoiceScreen
             onNavigate={(screenName, data) => {
               if (screenName === "results" && data) {
-                goToResults(data.offers || [], data.sessionId || state.sessionId, data.origin || "", data.destination || "", data.date || "");
+                const params = data.parameters || data;
+                goToResults(
+                  params.offers || [],
+                  params.session_id || state.sessionId,
+                  params.origin || "",
+                  params.destination || "",
+                  params.date || ""
+                );
               } else if (screenName === "home") {
                 goHome();
               }

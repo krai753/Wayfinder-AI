@@ -26,8 +26,25 @@ async def create_booking(req: BookingCreateRequest):
     destination = session.get("destination", "")
     departure_date = session.get("departure_date", "")
 
+    # If origin/destination/date missing from session, extract from cached offer
+    if not all([origin, destination, departure_date]) and offer_id:
+        from database import get_offers
+        cached_offers = get_offers(req.session_id)
+        for co in cached_offers:
+            od = co.get("offer_data", {})
+            if isinstance(od, dict) and od.get("id") == offer_id:
+                if not origin:
+                    origin = od.get("origin", origin)
+                if not destination:
+                    destination = od.get("destination", destination)
+                if not departure_date:
+                    dt = od.get("departure_time", "")
+                    if dt:
+                        departure_date = dt[:10]  # Extract YYYY-MM-DD from ISO datetime
+                break
+
     if not all([offer_id, origin, destination, departure_date]):
-        raise HTTPException(status_code=400, detail="Incomplete booking data. Complete the wizard first.")
+        raise HTTPException(status_code=400, detail=f"Incomplete booking data. Got offer={offer_id}, origin={origin}, dest={destination}, date={departure_date}")
 
     try:
         # Get cached offer data for passenger_id and amount
