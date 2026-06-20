@@ -23,7 +23,7 @@ import type {
 } from "../types";
 
 // Change this to your backend URL in production
-const BASE = "http://139.180.203.171:8000/api";
+const BASE = "/api";
 
 async function request<T>(
   endpoint: string,

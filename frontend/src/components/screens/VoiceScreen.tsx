@@ -201,7 +201,7 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
       setState("listening");
     } catch (err) {
       setState("idle");
-      setError("Microphone access denied. Please allow microphone permissions or type your command.");
+      setError("Microphone access denied. To use voice: open the HTTPS URL below and allow mic permission — or type your command below.");
     }
   }, [handleVoiceCommand]);
 
