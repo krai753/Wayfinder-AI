@@ -153,16 +153,64 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
     setError("");
   };
 
-  const handleMicTap = () => {
-    if (state === "listening") {
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        // Stop all tracks on the stream
+        stream.getTracks().forEach(t => t.stop());
+
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (blob.size === 0) {
+          setState("idle");
+          return;
+        }
+
+        setState("processing");
+        try {
+          const result = await api.listen(blob);
+          if (result.transcript?.trim()) {
+            await handleVoiceCommand(result.transcript);
+          } else {
+            setError("Could not understand audio. Please try typing your command.");
+            setState("idle");
+          }
+        } catch (err: any) {
+          setError(err.message || "Speech recognition failed");
+          setState("idle");
+        }
+      };
+
+      recorder.onerror = () => {
+        setState("idle");
+        setError("Recording error occurred");
+      };
+
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setState("listening");
+    } catch (err) {
       setState("idle");
-      return;
+      setError("Microphone access denied. Please allow microphone permissions or type your command.");
     }
-    setState("listening");
-    // For voice-first, we simulate a command or use the text input
-    // In production, this would use api.listen(MediaRecorder blob)
-    setState("idle");
-  };
+  }, [handleVoiceCommand]);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current = null;
+    }
+  }, []);
 
   return (
     <div className="min-h-screen" style={{ background: "#0B1020" }}>
@@ -182,7 +230,7 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
         {/* Mic area / main interaction */}
         <GlassCard
           className={`p-8 text-center transition-all duration-300 ${state === "result" ? "pb-6" : "pb-10"}`}
-          onClick={state === "idle" ? () => handleMicTap() : undefined}
+          onClick={state === "idle" ? () => startRecording() : undefined}
         >
           {state === "idle" && (
             <motion.div
@@ -190,13 +238,7 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
               exit={{ opacity: 0 }}
               className="flex flex-col items-center gap-5"
             >
-              <MicButton size="lg" active={false} onClick={() => {
-                setState("listening");
-                // In production, start recording here
-                setTimeout(() => {
-                  setState("idle");
-                }, 3000);
-              }} />
+              <MicButton size="lg" active={false} onClick={() => startRecording()} />
               <VoiceWave active={false} size="md" />
               <p className="text-base font-semibold text-white">Tap to Speak</p>
               <p className="text-xs text-[#94A3B8] -mt-2">or type below</p>
@@ -209,7 +251,7 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
               animate={{ opacity: 1, scale: 1 }}
               className="flex flex-col items-center gap-5"
             >
-              <MicButton size="lg" active={true} onClick={() => setState("idle")} />
+              <MicButton size="lg" active={true} onClick={() => stopRecording()} />
               <VoiceWave active={true} size="md" />
               <p className="text-base font-semibold text-[#4F46E5]">Listening...</p>
               <p className="text-xs text-[#94A3B8] -mt-2">Tap mic to stop</p>
