@@ -66,27 +66,51 @@ class VoiceEngine:
 
     async def text_to_speech(self, text: str) -> str:
         """
-        Convert text to speech audio file using gTTS (free, no API key).
+        Convert text to speech using OpenAI TTS (natural voice).
+        Falls back to gTTS if OpenAI API is unavailable.
         Returns path to the generated MP3 file.
         """
+        AUDIO_CACHE.mkdir(parents=True, exist_ok=True)
+        import uuid
+        filename = f"tts_{uuid.uuid4().hex[:8]}.mp3"
+        filepath = AUDIO_CACHE / filename
+
+        # Try OpenAI TTS first (natural, high quality)
+        api_key = settings.openai_api_key
+        if api_key:
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.post(
+                        "https://api.openai.com/v1/audio/speech",
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": "tts-1-hd",
+                            "input": text,
+                            "voice": "nova",
+                            "response_format": "mp3",
+                            "speed": 1.0,
+                        },
+                    )
+                    resp.raise_for_status()
+                    with open(filepath, "wb") as f:
+                        f.write(resp.content)
+                    logger.info(f"TTS (OpenAI): {filepath} — {len(text)} chars")
+                    return str(filepath)
+            except Exception as e:
+                logger.warning(f"OpenAI TTS failed, falling back to gTTS: {e}")
+
+        # Fallback to gTTS (free)
         try:
             from gtts import gTTS
-            AUDIO_CACHE.mkdir(parents=True, exist_ok=True)
-
-            import uuid
-            filename = f"tts_{uuid.uuid4().hex[:8]}.mp3"
-            filepath = AUDIO_CACHE / filename
-
             tts = gTTS(text=text, lang="en", slow=False)
             tts.save(str(filepath))
-
-            logger.info(f"TTS saved: {filepath}")
+            logger.info(f"TTS (gTTS): {filepath}")
             return str(filepath)
-        except ImportError:
-            logger.warning("gtts not installed, TTS unavailable")
-            return ""
         except Exception as e:
-            logger.error(f"TTS failed: {e}")
+            logger.error(f"All TTS failed: {e}")
             return ""
 
 
