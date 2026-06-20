@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
     deepseek_model: str = "deepseek-chat"
     openai_api_key: str = ""
-    ai_parser_enabled: bool = False
-    ai_parser_provider: str = "deepseek"
+    ai_parser_enabled: bool = True
+    ai_parser_provider: str = "openrouter"
     ai_parser_model: str = "deepseek/deepseek-v4-flash"
     ai_parser_api_key: str = ""
 

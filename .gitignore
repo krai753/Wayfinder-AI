@@ -18,10 +18,9 @@ __pycache__/
 venv/
 .venv/
 
-# Environment
+# Environment (API keys — NEVER commit these)
 .env
-.env.local
-.env.*.local
+.env.*
 
 # Backend
 backend/data/

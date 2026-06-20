@@ -147,7 +147,8 @@ class AIParser:
     async def _call_llm(self, system_prompt: str, user_prompt: str, api_key: str) -> Optional[dict]:
         """Call the LLM API and parse the response."""
         provider = settings.ai_parser_provider
-        model = settings.ai_parser_model
+        # Hardcoded to DeepSeek V4 Flash via OpenRouter — do not change
+        model = "deepseek/deepseek-v4-flash"
 
         if provider == "deepseek":
             url = "https://api.deepseek.com/v1/chat/completions"
