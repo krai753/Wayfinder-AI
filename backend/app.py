@@ -20,6 +20,7 @@ from routers import booking as booking_router
 from routers import wizard as wizard_router
 from routers import manage as manage_router
 from routers import voice as voice_router
+from llm_parser_ai import ai_parser
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("wayfinder")
@@ -43,6 +44,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     await duffel.close()
+    await ai_parser.close()
     logger.info("👋 Wayfinder backend stopped")
 
 

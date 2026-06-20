@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, File, UploadFile, Query
 from fastapi.responses import FileResponse
 from models import VoiceCommandRequest, VoiceCommandResponse
 from llm_orchestrator import llm
+from llm_parser_ai import ai_parser
 from voice_engine import voice
 from duffel_client import duffel
 
@@ -139,9 +140,17 @@ async def voice_command(req: VoiceCommandRequest):
                 "departure_date": session.get("departure_date"),
             }
 
-    # 2. LLM parses the command
+# 2. AI parses the command (try LLM first, fall back to rule-based)
     try:
-        result = await llm.parse_command(req.text, context)
+        # Try the AI parser (DeepSeek/OpenRouter) first
+        ai_result = await ai_parser.parse(req.text, context)
+        if ai_result:
+            result = ai_result
+            logger.info(f"AI parser → intent={result['intent']}")
+        else:
+            # Fall back to rule-based parser
+            result = await llm.parse_command(req.text, context)
+            logger.info(f"Rule-based parser → intent={result['intent']}")
     except Exception as e:
         logger.error(f"LLM parse failed: {e}")
         return VoiceCommandResponse(
