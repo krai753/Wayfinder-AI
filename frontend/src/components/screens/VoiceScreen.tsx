@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { Mic, MicOff, ArrowLeft, Loader2, ChevronRight } from "lucide-react";
 import { api } from "../../services/api";
 
-type VoiceState = "greeting" | "idle" | "listening" | "processing" | "result";
+type VoiceState = "initial" | "idle" | "listening" | "processing" | "result";
 
 function VoiceWave({ active, size = "md" }: { active: boolean; size?: "sm" | "md" | "lg" }) {
   const bars = size === "lg" ? 9 : size === "md" ? 7 : 5;
@@ -44,13 +44,13 @@ function generateGreeting(): string {
     `${timeGreeting}, and welcome to Wayfinder. Where would you like to go today?`,
     `${timeGreeting}! Welcome to Wayfinder. I'm your travel assistant. Where can I take you?`,
     `${timeGreeting} and welcome. I'm Wayfinder, your voice travel companion. Tell me where you'd like to fly!`,
-    `${timeGreeting}! Ready for your next trip? Just say something like \"Book a flight from London to Paris tomorrow\".`,
+    `${timeGreeting}! Ready for your next trip? Just say something like "Book a flight from London to Paris tomorrow".`,
   ];
   return greetings[Math.floor(Math.random() * greetings.length)];
 }
 
 export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: string, data?: any) => void }) {
-  const [state, setState] = useState<VoiceState>("greeting");
+  const [state, setState] = useState<VoiceState>("initial");
   const [transcript, setTranscript] = useState("");
   const [parameters, setParameters] = useState<Record<string, any>>({});
   const [intent, setIntent] = useState("");
@@ -58,37 +58,35 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
   const [inputText, setInputText] = useState("");
   const [sessionId, setSessionId] = useState<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const greetingPlayed = useRef(false);
+  const hasGreeted = useRef(false);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const playTts = useCallback(async (text: string) => {
+  // ── PLAY AUDIO (always within a user-gesture context) ─────────
+
+  const playTts = useCallback(async (text: string): Promise<void> => {
     try {
       const blob = await api.speak(text);
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
-      audio.onended = () => URL.revokeObjectURL(url);
-      audio.play().catch(() => {});
-      return new Promise<void>((resolve) => {
+      return new Promise((resolve) => {
         audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
-        audio.onerror = () => resolve();
+        audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+        // Chrome/Safari may still block if no user gesture — resolve either way
+        audio.play().catch(() => { URL.revokeObjectURL(url); resolve(); });
       });
     } catch {
-      // TTS error — non-critical
       return;
     }
   }, []);
 
-  // ── GREETING ON MOUNT (AUDIO ONLY) ────────────────────────────
+  // ── PLAY GREETING ON FIRST MIC TAP ─────────────────────────────
 
-  useEffect(() => {
-    if (greetingPlayed.current) return;
-    greetingPlayed.current = true;
-
+  const playGreeting = useCallback(async () => {
+    if (hasGreeted.current) return;
+    hasGreeted.current = true;
+    setState("idle");
     const greeting = generateGreeting();
-    const t = setTimeout(async () => {
-      await playTts(greeting);
-      setState("idle");
-    }, 500);
-    return () => clearTimeout(t);
+    await playTts(greeting);
   }, [playTts]);
 
   // ── VOICE COMMAND HANDLING ─────────────────────────────────────
@@ -108,13 +106,10 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
         setSessionId(result.parameters.session_id);
       }
 
-      // Auto-prompt for next input after response
       setState("result");
-
-      // Play response via audio
       await playTts(result.response_text);
 
-      // Check if we have results with offers — navigate
+      // Navigate to results if we have flight offers
       if (
         (result.intent === "search_flights" || result.intent === "search_with_budget") &&
         result.parameters?.offers?.length > 0
@@ -123,15 +118,9 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
         return;
       }
 
-      // If booking is complete — go home or show success
-      if (result.intent === "book_flight" && result.parameters?.booking_id) {
-        return;
-      }
-
-      // Continue conversation — re-prompt for next input
+      // Stay on page for further conversation
       setState("idle");
       setTranscript("");
-
     } catch (err: any) {
       setError(err.message || "Something went wrong");
       setState("idle");
@@ -142,13 +131,18 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
 
   const recognitionRef = useRef<any>(null);
 
-  const startRecording = useCallback(async () => {
+  const startListening = useCallback(async () => {
+    // Play greeting on first tap, then start listening
+    if (!hasGreeted.current) {
+      await playGreeting();
+    }
+
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      setError("Your browser doesn't support speech recognition. Please type your command below.");
+      setError("Your browser doesn't support speech recognition. Please type instead.");
       return;
     }
 
@@ -183,7 +177,7 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
 
       recognition.onend = () => {
         recognitionRef.current = null;
-        setState(prev => prev === "listening" ? "idle" : prev);
+        setState(prev => prev === "listening" || prev === "initial" ? "idle" : prev);
       };
 
       recognitionRef.current = recognition;
@@ -192,19 +186,50 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
       setError("");
     } catch (err) {
       setState("idle");
-      setError("Microphone access denied. Allow mic in your browser settings, or type your command below.");
+      setError("Microphone access denied. Allow mic in browser settings, or type your command below.");
     }
-  }, [handleVoiceCommand]);
+  }, [handleVoiceCommand, playGreeting]);
 
-  const stopRecording = useCallback(() => {
+  const stopListening = useCallback(() => {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       recognitionRef.current = null;
     }
+    setState("idle");
   }, []);
+
+  // ── TAP-AND-HOLD (push to talk) ───────────────────────────────
+
+  const handlePointerDown = useCallback(() => {
+    holdTimer.current = setTimeout(() => {
+      // Long press → start listening
+      startListening();
+    }, 150); // 150ms hold threshold
+  }, [startListening]);
+
+  const handlePointerUp = useCallback(() => {
+    if (holdTimer.current) {
+      clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+    // If we were listening and user releases → stop
+    if (recognitionRef.current) {
+      stopListening();
+    }
+  }, [stopListening]);
+
+  // ── TEXT INPUT FALLBACK ───────────────────────────────────────
 
   const handleSubmitText = () => {
     if (inputText.trim()) {
+      // If greeting hasn't played yet, play it first
+      if (!hasGreeted.current) {
+        playGreeting().then(() => {
+          handleVoiceCommand(inputText);
+          setInputText("");
+        });
+        return;
+      }
       handleVoiceCommand(inputText);
       setInputText("");
     }
@@ -215,12 +240,12 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
   };
 
   const handleReset = () => {
-    setState("idle");
+    setState("initial");
     setTranscript("");
     setParameters({});
     setIntent("");
     setError("");
-    greetingPlayed.current = false;
+    hasGreeted.current = false;
   };
 
   return (
@@ -236,7 +261,6 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
         </button>
         <h1 className="text-lg font-bold text-white">Wayfinder</h1>
         <div className="flex-1" />
-        {/* Status badge */}
         <span
           className="text-[10px] font-semibold tracking-wider uppercase px-2 py-1 rounded-full"
           style={{
@@ -245,32 +269,28 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
             border: `1px solid ${state === "listening" ? "rgba(79,70,229,0.2)" : "rgba(255,255,255,0.06)"}`,
           }}
         >
-          {state === "greeting" ? "Speaking..." : state === "listening" ? "Listening" : state === "processing" ? "Thinking" : "Ready"}
+          {state === "initial" ? "Ready" : state === "listening" ? "Listening" : state === "processing" ? "Thinking" : state === "result" ? "Speaking" : "Ready"}
         </span>
       </div>
 
       <div className="flex-1 px-5 pb-8 flex flex-col items-center justify-center">
-        {/* ── GREETING / LOADING ──────────────────────────── */}
-        {state === "greeting" && (
+        {/* ── INITIAL / IDLE — TAP & HOLD TO SPEAK ──────────── */}
+        {(state === "initial" || state === "idle") && (
           <div className="flex flex-col items-center gap-6">
-            <div
-              className="w-36 h-36 rounded-full flex items-center justify-center"
-              style={{ background: "linear-gradient(135deg,rgba(79,70,229,0.15),rgba(99,102,241,0.08))", border: "2px solid rgba(79,70,229,0.2)" }}
-            >
-              <Loader2 size={52} color="#6366F1" className="animate-spin" />
-            </div>
-            <p className="text-lg font-semibold text-white/70">Welcome...</p>
-            <VoiceWave active={true} size="lg" />
-          </div>
-        )}
-
-        {/* ── IDLE — TAP TO SPEAK ─────────────────────────── */}
-        {state === "idle" && (
-          <div className="flex flex-col items-center gap-6">
-            {/* BIG MIC */}
+            {/* BIG MIC — tap & hold to talk */}
             <motion.button
-              onClick={() => startRecording()}
-              className="w-52 h-52 rounded-full flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-[#4F46E5]/50 active:scale-90 transition-transform"
+              onPointerDown={handlePointerDown}
+              onPointerUp={handlePointerUp}
+              onPointerLeave={handlePointerUp}
+              onTouchStart={handlePointerDown}
+              onTouchEnd={handlePointerUp}
+              onClick={() => {
+                // Tap (not hold) → play greeting on first tap, then start listening
+                if (state === "initial") {
+                  startListening();
+                }
+              }}
+              className="w-52 h-52 rounded-full flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-[#4F46E5]/50 active:scale-90 transition-transform select-none"
               style={{
                 background: "linear-gradient(135deg,rgba(79,70,229,0.2),rgba(99,102,241,0.1))",
                 border: "3px solid rgba(79,70,229,0.3)",
@@ -281,7 +301,14 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
               <Mic size={72} color="#fff" />
             </motion.button>
             <VoiceWave active={false} size="lg" />
-            <p className="text-lg font-bold text-white">Tap to speak</p>
+            {state === "initial" ? (
+              <>
+                <p className="text-lg font-bold text-white">Tap to speak</p>
+                <p className="text-sm text-[#64748B] -mt-2">Hold to talk · Release to stop</p>
+              </>
+            ) : (
+              <p className="text-lg font-bold text-white">Tap & speak</p>
+            )}
           </div>
         )}
 
@@ -289,7 +316,7 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
         {state === "listening" && (
           <div className="flex flex-col items-center gap-6">
             <motion.button
-              onClick={() => stopRecording()}
+              onClick={stopListening}
               className="w-52 h-52 rounded-full flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-[#4F46E5]/50"
               style={{
                 background: "linear-gradient(135deg,#4F46E5,#6366f1)",
@@ -328,7 +355,7 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
           </div>
         )}
 
-        {/* ── RESULT (transient - transitions back to idle after TTS ends) ── */}
+        {/* ── RESULT (speaking the response) ─────────────── */}
         {state === "result" && (
           <div className="flex flex-col items-center gap-6">
             <div
@@ -355,14 +382,14 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
         )}
       </div>
 
-      {/* ── TEXT INPUT BAR (accessibility fallback at bottom) ── */}
+      {/* ── TEXT INPUT BAR (accessibility fallback) ──────────── */}
       <div
         className="mx-5 mb-6 flex items-center gap-3 rounded-2xl px-4 py-3"
         style={{ background: "rgba(21,28,47,0.8)", border: "1px solid rgba(255,255,255,0.06)" }}
       >
         <motion.button
-          onClick={state === "listening" ? stopRecording : startRecording}
-          disabled={state === "greeting" || state === "processing"}
+          onClick={state === "listening" ? stopListening : startListening}
+          disabled={state === "processing"}
           className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 focus:outline-none focus:ring-2 focus:ring-[#4F46E5] disabled:opacity-40 ${state === "listening" ? "bg-gradient-to-br from-[#4F46E5] to-[#6366f1]" : "bg-white/10"}`}
           whileTap={{ scale: 0.9 }}
         >
@@ -381,7 +408,7 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
 
         <button
           onClick={handleSubmitText}
-          disabled={!inputText.trim() || state === "greeting" || state === "processing"}
+          disabled={!inputText.trim() || state === "processing"}
           className="w-10 h-10 rounded-xl flex items-center justify-center disabled:opacity-30 active:scale-90 transition-transform focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
           style={{ background: inputText.trim() ? "linear-gradient(135deg,#4F46E5,#6366f1)" : "transparent" }}
         >
