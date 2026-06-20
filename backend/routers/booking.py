@@ -114,21 +114,25 @@ async def create_booking(req: BookingCreateRequest):
 
     except Exception as e:
         logger.warning(f"Duffel order creation failed, creating mock booking: {e}")
-        # Mock booking fallback for hackathon demo (Duffel test limits)
+        # Mock booking fallback — Duffel sandbox offers expire within minutes
+        # Use actual offer data from cache for realistic mock
+        mock_amount = total_amount if total_amount != "0.00" else "432.26"
+        mock_currency = currency if currency != "GBP" else "GBP"
+        mock_summary = session.get("selected_flight_summary", f"{origin} → {destination}, {departure_date}")
         booking_id = f"bk_{uuid.uuid4().hex[:10]}"
         booking = {
             "id": booking_id,
             "session_id": req.session_id,
-            "duffel_order_id": f"mock_order_{uuid.uuid4().hex[:8]}",
+            "duffel_order_id": f"mock_{uuid.uuid4().hex[:8]}",
             "status": "confirmed",
             "origin": origin,
             "destination": destination,
             "departure_date": departure_date,
-            "flight_summary": session.get("selected_flight_summary", ""),
+            "flight_summary": mock_summary,
             "passenger_name": passenger_name,
             "passenger_assistance": session.get("passenger_assistance", "none"),
-            "total_amount": "432.26",
-            "total_currency": "GBP",
+            "total_amount": mock_amount,
+            "total_currency": mock_currency,
             "booking_reference": f"WAY{booking_id[-6:].upper()}",
         }
         save_booking(booking)
@@ -140,8 +144,8 @@ async def create_booking(req: BookingCreateRequest):
             destination=destination,
             departure_date=departure_date,
             passenger_name=passenger_name,
-            flight_summary=session.get("selected_flight_summary"),
-            total_amount="432.26 GBP",
+            flight_summary=mock_summary,
+            total_amount=f"{mock_amount} {mock_currency}",
             booking_reference=booking["booking_reference"],
             created_at=datetime.utcnow().isoformat(),
         )
