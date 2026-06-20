@@ -153,62 +153,73 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
     setError("");
   };
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  // ── Web Speech API (browser-native, free, no API key) ──────────
+
+  const recognitionRef = useRef<any>(null);
 
   const startRecording = useCallback(async () => {
+    // Check for browser SpeechRecognition support
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setError("Your browser doesn't support speech recognition. Please type your command below.");
+      return;
+    }
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      audioChunksRef.current = [];
+      // Request mic permission first
+      await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
 
-      recorder.onstop = async () => {
-        // Stop all tracks on the stream
-        stream.getTracks().forEach(t => t.stop());
-
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        if (blob.size === 0) {
-          setState("idle");
-          return;
-        }
-
-        setState("processing");
-        try {
-          const result = await api.listen(blob);
-          if (result.transcript?.trim()) {
-            await handleVoiceCommand(result.transcript);
-          } else {
-            setError("Could not understand audio. Please try typing your command.");
-            setState("idle");
-          }
-        } catch (err: any) {
-          setError(err.message || "Speech recognition failed");
-          setState("idle");
+      recognition.onresult = (event: any) => {
+        const last = event.results.length - 1;
+        const text = event.results[last][0].transcript;
+        if (event.results[last].isFinal) {
+          setTranscript(text);
+          setState("processing");
+          handleVoiceCommand(text);
+        } else {
+          // Show interim results live as user speaks
+          setTranscript(text);
         }
       };
 
-      recorder.onerror = () => {
+      recognition.onerror = (event: any) => {
         setState("idle");
-        setError("Recording error occurred");
+        const msg = event.error === "no-speech"
+          ? "No speech detected. Please try again or type your command."
+          : event.error === "aborted"
+            ? ""
+            : `Speech error: ${event.error}. Please type instead.`;
+        if (msg) setError(msg);
       };
 
-      mediaRecorderRef.current = recorder;
-      recorder.start();
+      recognition.onend = () => {
+        recognitionRef.current = null;
+        // Only reset to idle if we didn't already transition to processing
+        setState(prev => prev === "listening" ? "idle" : prev);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
       setState("listening");
+      setError("");
     } catch (err) {
       setState("idle");
-      setError("Microphone access denied. To use voice: open the HTTPS URL below and allow mic permission — or type your command below.");
+      setError("Microphone access denied. Allow mic in your browser settings, or type your command below.");
     }
   }, [handleVoiceCommand]);
 
   const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current = null;
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
     }
   }, []);
 
