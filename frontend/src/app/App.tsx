@@ -191,6 +191,9 @@ function BottomNav({ current, navigate }: { current: Screen; navigate: (s: Scree
         })}
       </div>
     </div>
+  );
+}
+
 function SplashScreen({ navigate }: { navigate: (s: Screen) => void }) {
   return (
     <div
