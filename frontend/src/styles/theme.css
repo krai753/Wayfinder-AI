@@ -5,9 +5,6 @@
  * the design tokens reach every component, while keeping the JS API
  * ergonomic via tokens.ts.
  */
-@import './fonts.css';
-@import './tailwind.css';
-
 :root {
   /* Background */
   --bg-deepest: #050608;

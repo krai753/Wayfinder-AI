@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { ArrowLeft, User, Eye, Accessibility, Check, Wheelchair } from "lucide-react";
+import { ArrowLeft, User, Eye, Accessibility, Check } from "lucide-react";
 import { api } from "../../services/api";
 
 function GlassCard({ children, className = "", onClick }: { children: React.ReactNode; className?: string; onClick?: () => void }) {
@@ -33,7 +33,7 @@ function PrimaryButton({ children, onClick, className = "", disabled = false, ic
 const ASSISTANCE_OPTIONS = [
   { value: "none", label: "None", icon: <User size={22} />, color: "green" },
   { value: "visual", label: "Visual Assistance", icon: <Eye size={22} />, color: "blue" },
-  { value: "wheelchair", label: "Wheelchair", icon: <Wheelchair size={22} />, color: "amber" },
+  { value: "wheelchair", label: "Wheelchair", icon: <Accessibility size={22} />, color: "amber" },
 ] as const;
 
 export default function PassengerScreen({
