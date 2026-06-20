@@ -102,6 +102,8 @@ export default function VoiceScreen({
   const streamRef = useRef<MediaStream | null>(null);
   const autoListenRef = useRef(false);
   const sessionIdRef = useRef("");
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const pendingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── UNLOCK AUDIO ──────────────────────────────────────────
 
@@ -134,19 +136,23 @@ export default function VoiceScreen({
         const blob = await api.speak(text);
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
+        currentAudioRef.current = audio;
         return new Promise((resolve) => {
           audio.onended = () => {
             URL.revokeObjectURL(url);
+            currentAudioRef.current = null;
             resolve();
           };
           audio.onerror = () => {
             URL.revokeObjectURL(url);
+            currentAudioRef.current = null;
             resolve();
           };
           const playPromise = audio.play();
           if (playPromise) {
             playPromise.catch(() => {
               URL.revokeObjectURL(url);
+              currentAudioRef.current = null;
               setAudioBlocked(true);
               resolve();
             });
@@ -158,6 +164,26 @@ export default function VoiceScreen({
     },
     [unlockAudio]
   );
+
+  // ── STOP AUDIO (for interrupt) ─────────────────────────────
+
+  const stopAudio = useCallback(() => {
+    // Cancel any pending auto-listen timeout
+    if (pendingTimeoutRef.current) {
+      clearTimeout(pendingTimeoutRef.current);
+      pendingTimeoutRef.current = null;
+    }
+    // Stop any playing TTS audio
+    if (currentAudioRef.current) {
+      try {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.currentTime = 0;
+      } catch {}
+      currentAudioRef.current = null;
+    }
+    // Stop auto-listen
+    autoListenRef.current = false;
+  }, []);
 
   // ── START RECORDING (MediaRecorder → Whisper) ─────────────
 
@@ -240,7 +266,7 @@ export default function VoiceScreen({
             autoListenRef.current = true;
             setState("auto_listening");
             // Small delay then auto-record
-            setTimeout(() => {
+            pendingTimeoutRef.current = setTimeout(() => {
               if (autoListenRef.current) {
                 startRecording();
               }
@@ -252,7 +278,7 @@ export default function VoiceScreen({
             // Waiting for next input — auto-listen
             autoListenRef.current = true;
             setState("auto_listening");
-            setTimeout(() => {
+            pendingTimeoutRef.current = setTimeout(() => {
               if (autoListenRef.current) {
                 startRecording();
               }
@@ -261,6 +287,19 @@ export default function VoiceScreen({
             // Help shown — wait for user to tap again
             autoListenRef.current = false;
             setState("initial");
+          } else if (cmdResult.intent === "cs_escalation") {
+            // CS escalation — show result
+            setState("initial");
+            setConversationLog((prev) => [...prev, `📞 CS AGENT: ${cmdResult.response_text}`]);
+          } else if (cmdResult.intent === "collect_booking_info") {
+            // Still collecting fields — auto-listen
+            autoListenRef.current = true;
+            setState("auto_listening");
+            pendingTimeoutRef.current = setTimeout(() => {
+              if (autoListenRef.current) {
+                startRecording();
+              }
+            }, 800);
           } else {
             // Default: wait for user input
             autoListenRef.current = false;
@@ -324,6 +363,16 @@ export default function VoiceScreen({
 
   const handleMicTap = useCallback(async () => {
     unlockAudio();
+
+    // Interrupt: if speaking or auto-listening, stop everything and record
+    if (state === "speaking" || state === "auto_listening") {
+      stopAudio();
+      stopRecording();
+      await startRecording();
+      // startRecording already sets state to "recording"
+      return;
+    }
+
     if (state === "initial" || state === "booking_complete") {
       if (state === "booking_complete") {
         handleReset();
@@ -334,7 +383,7 @@ export default function VoiceScreen({
       await playGreeting();
       await startRecording();
     }
-  }, [state, unlockAudio, playGreeting, startRecording, handleReset]);
+  }, [state, unlockAudio, playGreeting, startRecording, handleReset, stopAudio, stopRecording]);
 
   const handleMicPress = useCallback(() => {
     if (state === "auto_listening") {
@@ -392,11 +441,12 @@ export default function VoiceScreen({
   useEffect(() => {
     return () => {
       autoListenRef.current = false;
+      stopAudio();
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
       }
     };
-  }, []);
+  }, [stopAudio]);
 
   // ── STATE LABEL ───────────────────────────────────────────
 
@@ -661,7 +711,7 @@ export default function VoiceScreen({
       >
         <motion.button
           onClick={handleMicTap}
-          disabled={state === "processing" || state === "transcribing" || state === "speaking"}
+          disabled={state === "processing" || state === "transcribing"}
           className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 focus:outline-none focus:ring-2 focus:ring-[#4F46E5] disabled:opacity-40 ${
             state === "recording" || state === "auto_listening"
               ? "bg-gradient-to-br from-[#4F46E5] to-[#6366f1]"

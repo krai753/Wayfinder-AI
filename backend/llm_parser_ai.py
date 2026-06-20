@@ -64,16 +64,26 @@ DATE HANDLING:
 - Return dates as YYYY-MM-DD format
 
 RULES:
-1. For select_flight: set parameters.position = "first", "cheapest", "second", "third", or a number string like "3"
-2. For provide_name: set parameters.name to the extracted passenger name
-3. For confirm_booking: set parameters.confirmed = true
-4. For search_flights/search_with_budget: always try to extract origin, destination, date
-5. If the user says ANYTHING not related to flights, return intent="help" with a friendly message
-6. response_text should be a NATURAL friendly spoken response in English
-7. Today's date is: {today}
+1. REQUIRED FIELDS for search_flights: origin (FROM city), destination (TO city), date (YYYY-MM-DD)
+2. REQUIRED FIELDS for provide_name: name
+3. OPTIONAL FIELDS: max_price (number), passengers (number)
+4. For select_flight: set parameters.position = "first", "cheapest", "second", "third", or a number string like "3"
+5. For confirm_booking: set parameters.confirmed = true
+6. If the user says ANYTHING not related to flights, return intent="help" with a friendly message
+7. response_text should be a NATURAL friendly spoken response in English
+8. Today's date is: {today}
+
+CONFIDENCE SCORING:
+Always include a "confidence" field (0.0 to 1.0) in parameters that rates how confident you are that you correctly understood and extracted ALL the user's fields.
+- 1.0 = Perfect, all fields clearly stated and unambiguously extracted
+- 0.95-0.99 = Very confident, minor ambiguity
+- 0.80-0.94 = Somewhat confident, some guessing involved
+- Below 0.80 = Not confident, had to infer or guess significantly
+- Set confidence LOW (0.5-0.7) if the user's speech was garbled, unclear, or you had to guess several fields
+- Set confidence HIGH (0.95+) if the user clearly stated origin, destination, and date with no ambiguity
 
 Respond ONLY with valid JSON (no markdown, no backticks):
-{{"intent": "...", "parameters": {{...}}, "response_text": "..."}}"""
+{"intent": "...", "parameters": {...}, "response_text": "..."}"""
 
 
 class AIParser:
@@ -124,6 +134,8 @@ class AIParser:
                 ctx_parts.append(f"Current session destination: {context['destination']}")
             if context.get("departure_date"):
                 ctx_parts.append(f"Current session date: {context['departure_date']}")
+            if context.get("passenger_name"):
+                ctx_parts.append(f"Current session passenger name: {context['passenger_name']}")
             if ctx_parts:
                 user_prompt += "\n\nSession context:\n" + "\n".join(ctx_parts)
 
@@ -161,7 +173,7 @@ class AIParser:
                 {"role": "user", "content": user_prompt},
             ],
             "temperature": 0.3,
-            "max_tokens": 350,
+            "max_tokens": 500,
         }
 
         client = await self._get_client()
@@ -191,6 +203,9 @@ class AIParser:
                 params = parsed.get("parameters", {})
                 response_text = parsed.get("response_text", "")
 
+                # Extract confidence (default to 1.0 if not provided)
+                confidence = float(params.get("confidence", 1.0))
+
                 # Normalize position values
                 if intent == "select_flight" and params.get("position"):
                     pos_map = {"1st": "first", "2nd": "second", "3rd": "third",
@@ -200,7 +215,7 @@ class AIParser:
                     if pos in pos_map:
                         params["position"] = pos_map[pos]
 
-                logger.info(f"AI parser: intent={intent}, params={params}")
+                logger.info(f"AI parser: intent={intent}, confidence={confidence}, params={params}")
                 return {
                     "intent": intent,
                     "parameters": {**params, "user_lang": params.get("user_lang", "en")},

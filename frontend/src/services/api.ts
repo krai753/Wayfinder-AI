@@ -239,6 +239,16 @@ export const api = {
     return res.json();
   },
 
+  /** Escalate to customer service */
+  async csEscalate(sessionId = "", issue = ""): Promise<Record<string, any>> {
+    const res = await fetch(
+      `${BASE}/voice/cs-escalate?session_id=${encodeURIComponent(sessionId)}&issue=${encodeURIComponent(issue)}`,
+      { method: "POST" }
+    );
+    if (!res.ok) throw new Error("CS escalation failed");
+    return res.json();
+  },
+
   // ── ❤️ Health Check ───────────────────────────────────────────
 
   /** Check if backend is alive */

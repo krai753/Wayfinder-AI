@@ -114,6 +114,61 @@ def _resolve_iata(city_or_code: str) -> str:
     return code  # Return original if nothing found
 
 
+# ── Booking Info Collector ──────────────────────────────────────
+# Collects required booking fields step by step via voice:
+#   name, origin, destination, departure_date, max_price (optional)
+
+
+def _save_extracted_fields(session_id: str, params: dict):
+    """Save any booking fields extracted by the AI parser into the wizard session."""
+    field_map = {
+        "origin": "origin",
+        "destination": "destination",
+        "date": "departure_date",
+        "name": "passenger_name",
+        "max_price": "max_price",
+        "passengers": "passengers",
+    }
+    for param_key, session_key in field_map.items():
+        value = params.get(param_key)
+        if value and str(value).strip():
+            # Check if already saved to avoid overwriting with empty
+            existing = get_wizard_session(session_id) if session_id else None
+            if existing:
+                existing_val = existing.get(session_key)
+                if existing_val:
+                    continue  # Don't overwrite existing values
+            process_step(session_id, session_key, {session_key: value})
+            logger.info(f"Booking collector: saved {session_key} = {value}")
+
+    # Mark session as in collecting mode
+    session = get_wizard_session(session_id)
+    if session and session.get("current_step") not in ("collecting_fields", "flight_selection", "passenger", "confirmation", "completed"):
+        process_step(session_id, "current_step", {"current_step": "collecting_fields"})
+
+
+def _get_missing_booking_fields(session_id: str) -> list:
+    """Check which required booking fields are still missing from the session."""
+    session = get_wizard_session(session_id)
+    if not session:
+        return ["origin", "destination", "departure_date", "passenger_name"]
+
+    missing = []
+
+    # Required fields for booking
+    if not session.get("origin"):
+        missing.append("origin")
+    if not session.get("destination"):
+        missing.append("destination")
+    if not session.get("departure_date"):
+        missing.append("departure_date")
+    if not session.get("passenger_name"):
+        missing.append("passenger_name")
+
+    logger.info(f"Booking collector: session {session_id} missing fields: {missing}")
+    return missing
+
+
 # ── MAIN VOICE COMMAND ────────────────────────────────────────────
 
 
@@ -163,9 +218,64 @@ async def voice_command(req: VoiceCommandRequest):
     params = result.get("parameters", {})
     response_text = result.get("response_text", "")
 
-    logger.info(f"Parsed command: intent={intent}, params={params}")
+    # ── CONFIDENCE CHECK — route to CS if below 95% ────────────
+    confidence = float(params.get("confidence", 1.0))
+    if confidence < 0.95 and intent in ("search_flights", "search_with_budget", "provide_name"):
+        logger.warning(f"Low confidence ({confidence}) — escalating to CS")
+        return VoiceCommandResponse(
+            intent="cs_escalation",
+            parameters={"confidence": confidence, "original_text": req.text},
+            response_text=(
+                "I'm sorry, I didn't quite get that clearly enough to proceed safely. "
+                "Let me connect you to a customer service agent who can help you directly. "
+                "Please hold the line."
+            ),
+        )
 
-    # 3. Execute the appropriate action
+    logger.info(f"Parsed command: intent={intent}, confidence={confidence}, params={params}")
+
+    # 3. Booking info collector — if we're collecting fields, save & check
+    if req.session_id and intent in ("search_flights", "provide_name"):
+        session = get_wizard_session(req.session_id)
+        if session and session.get("current_step") == "collecting_fields":
+            # We're in booking info collection mode — save what we got
+            _save_extracted_fields(req.session_id, params)
+            sid = req.session_id
+            missing = _get_missing_booking_fields(sid)
+
+            if not missing:
+                # All fields collected! Search flights
+                process_step(sid, "collecting_fields", {"collected": "true"})
+                session_data = get_wizard_session(sid)
+                search_params = {
+                    "origin": session_data.get("origin", ""),
+                    "destination": session_data.get("destination", ""),
+                    "date": session_data.get("departure_date", ""),
+                    "passengers": session_data.get("passengers", 1),
+                    "max_price": session_data.get("max_price", 0),
+                    "user_lang": params.get("user_lang", ""),
+                    "passenger_name": session_data.get("passenger_name", ""),
+                }
+                return await _handle_search_flights(search_params, "", sid)
+
+            # Ask for the next missing field
+            field_questions = {
+                "origin": "Where would you like to fly from?",
+                "destination": "And where would you like to go?",
+                "departure_date": "What date would you like to travel?",
+                "passenger_name": "What is the passenger's full name?",
+                "max_price": "Do you have a maximum budget for this trip?",
+            }
+            next_field = missing[0]
+            question = field_questions.get(next_field, f"Could you please tell me your {next_field}?")
+            logger.info(f"Booking collector: missing {missing}, asking: {next_field}")
+            return VoiceCommandResponse(
+                intent="collect_booking_info",
+                parameters={"missing_fields": missing, "next_field": next_field},
+                response_text=question,
+            )
+
+    # 4. Execute the appropriate action
     try:
         if intent == "search_flights":
             return await _handle_search_flights(params, response_text, req.session_id)
@@ -422,14 +532,33 @@ async def _handle_reschedule_booking(params: dict, response_text: str) -> VoiceC
 
 
 async def _handle_view_history(params: dict, response_text: str) -> VoiceCommandResponse:
-    """View flight history for a user."""
+    """View flight history for a user. Works with or without user_id."""
     user_id = params.get("user_id", "")
 
     if not user_id:
+        # No user_id — fetch all bookings instead
+        bookings = get_bookings(limit=20)
+        if not bookings:
+            return VoiceCommandResponse(
+                intent="view_history",
+                parameters=params,
+                response_text="You don't have any flights yet. Say 'book a flight' to get started!",
+            )
+        total = len(bookings)
+        upcoming = sum(1 for b in bookings if b.get("status") == "confirmed" and b.get("departure_date", "") >= date.today().isoformat())
+        speech = (
+            f"You have {total} trips in your history. "
+            f"{upcoming} of them are upcoming. "
+            f"Your most recent trip was from {bookings[0].get('origin', '')} to {bookings[0].get('destination', '')}."
+        )
         return VoiceCommandResponse(
             intent="view_history",
-            parameters=params,
-            response_text="I need to know which user's history to look up.",
+            parameters={
+                "user_id": "all",
+                "total_trips": total,
+                "bookings": bookings[:10],
+            },
+            response_text=response_text or speech,
         )
 
     bookings = get_bookings_by_user(user_id)
@@ -457,14 +586,41 @@ async def _handle_view_history(params: dict, response_text: str) -> VoiceCommand
 
 
 async def _handle_view_portfolio(params: dict, response_text: str) -> VoiceCommandResponse:
-    """View flight portfolio statistics."""
+    """View flight portfolio statistics. Works with or without user_id."""
     user_id = params.get("user_id", "")
 
     if not user_id:
+        # No user_id — calculate from all bookings
+        all_bookings = get_bookings(limit=1000)
+        total = len(all_bookings)
+        spent = sum(float(b.get("total_amount", 0) or 0) for b in all_bookings)
+        cancelled = sum(1 for b in all_bookings if b.get("status") == "cancelled")
+        upcoming = [b for b in all_bookings if b.get("status") == "confirmed" and b.get("departure_date", "") >= date.today().isoformat()]
+
+        # Favourite route
+        routes = {}
+        for b in all_bookings:
+            route = f"{b.get('origin', '?')} → {b.get('destination', '?')}"
+            routes[route] = routes.get(route, 0) + 1
+        fav_route = max(routes, key=routes.get) if routes else "None yet"
+
+        speech = (
+            f"You've taken {total} trips, spending a total of "
+            f"£{spent:.2f}. "
+            f"Your favourite route is {fav_route}. "
+            f"You have {len(upcoming)} upcoming trips."
+        )
         return VoiceCommandResponse(
             intent="view_portfolio",
-            parameters=params,
-            response_text="I need to know which user's portfolio to look up.",
+            parameters={
+                "user_id": "all",
+                "total_trips": total,
+                "total_spent": spent,
+                "favorite_route": fav_route,
+                "upcoming_trips": upcoming,
+                "cancelled_count": cancelled,
+            },
+            response_text=response_text or speech,
         )
 
     stats = get_portfolio_stats(user_id)
@@ -600,6 +756,25 @@ async def voice_speak(text: str = Query(..., description="Text to convert to spe
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)}")
+
+
+# ── CS ESCALATION (mock) ─────────────────────────────────────────
+
+
+@router.post("/cs-escalate")
+async def cs_escalate(session_id: str = "", issue: str = ""):
+    """
+    Escalate to a mock customer service agent.
+    In production, this would route to Twilio/Vonage to call a CS agent.
+    """
+    logger.info(f"CS escalation triggered: session={session_id}, issue={issue}")
+    return {
+        "status": "escalated",
+        "session_id": session_id,
+        "message": "A customer service agent has been notified. They will call you shortly.",
+        "mock_phone": "+1-555-WAYFINDER",
+        "estimated_wait": "2-3 minutes",
+    }
 
 
 # ── SPEECH-TO-TEXT ────────────────────────────────────────────────
