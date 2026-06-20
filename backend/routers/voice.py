@@ -171,7 +171,12 @@ async def voice_command(req: VoiceCommandRequest):
             return await _handle_search_flights(params, response_text, req.session_id)
 
         elif intent == "book_flight":
-            return await _handle_book_flight(params, response_text, req.session_id)
+            # Dead intent — LLM never returns this. Route to help instead.
+            return VoiceCommandResponse(
+                intent="help",
+                parameters=params,
+                response_text="Try saying 'search flights from New York to London' to get started.",
+            )
 
         elif intent == "cancel_booking":
             return await _handle_cancel_booking(params, response_text)
@@ -299,115 +304,6 @@ async def _handle_search_flights(params: dict, response_text: str, session_id: s
             "offers": offers[:5],  # Top 5 for frontend display
             "session_id": sid,
             "cheapest_offer": cheapest if offers else None,
-        },
-        response_text=response_text or speech,
-    )
-
-
-async def _handle_book_flight(params: dict, response_text: str, session_id: str | None) -> VoiceCommandResponse:
-    """Book a flight using an existing wizard session or create one."""
-    sid = params.get("session_id") or session_id
-    offer_id = params.get("offer_id", "")
-
-    if not sid:
-        # Need to start a booking flow
-        return VoiceCommandResponse(
-            intent="book_flight",
-            parameters=params,
-            response_text="Let me start a new booking. First, where would you like to fly from?",
-        )
-
-    if not offer_id:
-        return VoiceCommandResponse(
-            intent="book_flight",
-            parameters=params,
-            response_text="I need to know which flight you'd like to book. Try saying 'select the first flight'.",
-        )
-
-    # Get the session and stored offers
-    session = get_wizard_session(sid)
-    if not session:
-        return VoiceCommandResponse(
-            intent="book_flight",
-            parameters=params,
-            response_text="I couldn't find your booking session. Let's start fresh.",
-        )
-
-    # Auto-complete wizard steps for direct booking
-    origin = params.get("origin") or session.get("origin", "")
-    destination = params.get("destination") or session.get("destination", "")
-    dep_date = params.get("date") or session.get("departure_date", "")
-    passenger_name = params.get("passenger_name") or session.get("passenger_name", "")
-
-    if origin:
-        process_step(sid, "origin", {"origin": origin})
-    if destination:
-        process_step(sid, "destination", {"destination": destination})
-    if dep_date:
-        process_step(sid, "departure_date", {"departure_date": dep_date})
-
-    if offer_id:
-        # Build flight summary from cached offers
-        from database import get_offers
-        cached = get_offers(sid)
-        summary = ""
-        for co in cached:
-            od = co.get("offer_data", {})
-            if isinstance(od, dict) and od.get("id") == offer_id:
-                summary = (
-                    f"{od.get('airline', '')} {od.get('flight_number', '')} — "
-                    f"{od.get('origin', '')} → {od.get('destination', '')}, "
-                    f"{od.get('price', '')} {od.get('currency', '')}"
-                )
-                break
-
-        process_step(sid, "flight_selection", {"offer_id": offer_id, "flight_summary": summary})
-
-    # Check if we have all we need to book
-    updated_session = get_wizard_session(sid)
-    need_passenger = not updated_session.get("passenger_name")
-    need_confirmation = updated_session.get("current_step") not in ("confirmation", "completed")
-
-    if need_passenger:
-        return VoiceCommandResponse(
-            intent="book_flight",
-            parameters={"session_id": sid, "offer_id": offer_id, "missing": "passenger_name"},
-            response_text="What is the passenger's name?",
-        )
-
-    if need_confirmation:
-        return VoiceCommandResponse(
-            intent="book_flight",
-            parameters={"session_id": sid, "offer_id": offer_id},
-            response_text=f"Ready to book! {updated_session.get('selected_flight_summary', '')}. Shall I confirm?",
-        )
-
-    # Everything is ready — create the booking
-    process_step(sid, "confirmation", {"confirmed": True})
-
-    from routers.booking import create_booking
-    from models import BookingCreateRequest
-
-    booking_result = await create_booking(BookingCreateRequest(session_id=sid))
-
-    speech = (
-        f"Booking confirmed! Your flight from {booking_result.origin} to {booking_result.destination} "
-        f"on {booking_result.departure_date} is booked. "
-        f"Reference: {booking_result.booking_reference}. "
-        f"Total: {booking_result.total_amount}."
-    )
-
-    return VoiceCommandResponse(
-        intent="book_flight",
-        parameters={
-            "session_id": sid,
-            "booking_id": booking_result.id,
-            "booking_reference": booking_result.booking_reference,
-            "origin": booking_result.origin,
-            "destination": booking_result.destination,
-            "departure_date": booking_result.departure_date,
-            "total_amount": booking_result.total_amount,
-            "passenger_name": booking_result.passenger_name,
         },
         response_text=response_text or speech,
     )
