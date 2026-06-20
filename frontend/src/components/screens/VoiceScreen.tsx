@@ -3,7 +3,14 @@ import { motion } from "motion/react";
 import { Mic, MicOff, ArrowLeft, Loader2, Sparkles, ChevronRight } from "lucide-react";
 import { api } from "../../services/api";
 
-type VoiceState = "idle" | "listening" | "processing" | "result";
+type VoiceState = "greeting" | "idle" | "listening" | "processing" | "result";
+
+interface ChatMessage {
+  role: "assistant" | "user";
+  text: string;
+  parameters?: Record<string, any>;
+  intent?: string;
+}
 
 function GlassCard({ children, className = "", onClick }: { children: React.ReactNode; className?: string; onClick?: () => void }) {
   return (
@@ -92,16 +99,34 @@ function MicButton({ size = "lg", active = false, onClick }: { size?: "sm" | "md
   );
 }
 
+function generateGreeting(): string {
+  const hour = new Date().getHours();
+  let timeGreeting: string;
+  if (hour < 12) timeGreeting = "Good morning";
+  else if (hour < 17) timeGreeting = "Good afternoon";
+  else timeGreeting = "Good evening";
+
+  const greetings = [
+    `${timeGreeting}, and welcome to Wayfinder. Where would you like to go today?`,
+    `${timeGreeting}! Welcome to Wayfinder. I'm your travel assistant. Where can I take you?`,
+    `${timeGreeting} and welcome. I'm Wayfinder, your voice travel companion. Tell me where you'd like to fly!`,
+    `${timeGreeting}! Ready for your next trip? Just say something like "Book a flight from London to Paris tomorrow".`,
+  ];
+  return greetings[Math.floor(Math.random() * greetings.length)];
+}
+
 export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: string, data?: any) => void }) {
-  const [state, setState] = useState<VoiceState>("idle");
+  const [state, setState] = useState<VoiceState>("greeting");
+  const [conversation, setConversation] = useState<ChatMessage[]>([]);
   const [transcript, setTranscript] = useState("");
-  const [responseText, setResponseText] = useState("");
   const [parameters, setParameters] = useState<Record<string, any>>({});
   const [intent, setIntent] = useState("");
   const [error, setError] = useState("");
   const [inputText, setInputText] = useState("");
+  const [sessionId, setSessionId] = useState<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const transcriptRef = useRef<HTMLDivElement>(null);
+  const chatRef = useRef<HTMLDivElement>(null);
+  const greetingPlayed = useRef(false);
 
   const playTts = useCallback(async (text: string) => {
     try {
@@ -115,45 +140,86 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
     }
   }, []);
 
+  // ── GREETING ON MOUNT ──────────────────────────────────────────
+
+  useEffect(() => {
+    if (greetingPlayed.current) return;
+    greetingPlayed.current = true;
+
+    const greeting = generateGreeting();
+    setConversation([{ role: "assistant", text: greeting }]);
+    // Small delay so the UI renders before TTS plays
+    const t = setTimeout(() => playTts(greeting), 400);
+    const t2 = setTimeout(() => setState("idle"), 1200);
+    return () => { clearTimeout(t); clearTimeout(t2); };
+  }, [playTts]);
+
+  // Auto-scroll chat to the latest message
+  useEffect(() => {
+    if (chatRef.current) {
+      chatRef.current.scrollTop = chatRef.current.scrollHeight;
+    }
+  }, [conversation]);
+
+  // ── VOICE COMMAND HANDLING ─────────────────────────────────────
+
   const handleVoiceCommand = useCallback(async (text: string) => {
     if (!text.trim()) return;
+
+    // Add user message to conversation
+    setConversation(prev => [...prev, { role: "user", text }]);
     setTranscript(text);
     setState("processing");
     setError("");
+
     try {
-      const result = await api.voiceCommand(text);
+      const result = await api.voiceCommand(text, sessionId);
       setIntent(result.intent);
-      setResponseText(result.response_text);
       setParameters(result.parameters || {});
-      setState("result");
+      if (result.parameters?.session_id) {
+        setSessionId(result.parameters.session_id);
+      }
+
+      // Add assistant response to conversation
+      const assistantMsg: ChatMessage = {
+        role: "assistant",
+        text: result.response_text,
+        parameters: result.parameters,
+        intent: result.intent,
+      };
+      setConversation(prev => [...prev, assistantMsg]);
+
+      // Play TTS response
       playTts(result.response_text);
+
+      // If it's a search result with offers, navigate to results
+      if (
+        (result.intent === "search_flights" || result.intent === "search_with_budget") &&
+        result.parameters?.offers?.length > 0
+      ) {
+        setState("result");
+        return;
+      }
+
+      // If all booking params are ready, show continue button
+      if (
+        result.intent === "book_flight" &&
+        result.parameters?.booking_id
+      ) {
+        setState("result");
+        return;
+      }
+
+      // Otherwise — conversational: prompt user to speak again
+      // Wait for TTS to finish, then auto-prompt
+      setState("result");
     } catch (err: any) {
       setError(err.message || "Something went wrong");
       setState("idle");
     }
   }, [playTts]);
 
-  const handleSubmitText = () => {
-    if (inputText.trim()) {
-      handleVoiceCommand(inputText);
-      setInputText("");
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") handleSubmitText();
-  };
-
-  const handleReset = () => {
-    setState("idle");
-    setTranscript("");
-    setResponseText("");
-    setParameters({});
-    setIntent("");
-    setError("");
-  };
-
-  // ── Web Speech API (browser-native, free, no API key) ──────────
+  // ── START LISTENING ────────────────────────────────────────────
 
   const recognitionRef = useRef<any>(null);
 
@@ -182,12 +248,7 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
           setTranscript(text);
           handleVoiceCommand(text);
         } else {
-          // Show interim results LIVE as user speaks
           setTranscript(text);
-          // Auto-scroll to keep latest text visible
-          if (transcriptRef.current) {
-            transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
-          }
         }
       };
 
@@ -223,6 +284,27 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
     }
   }, []);
 
+  const handleSubmitText = () => {
+    if (inputText.trim()) {
+      handleVoiceCommand(inputText);
+      setInputText("");
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") handleSubmitText();
+  };
+
+  const handleReset = () => {
+    setState("idle");
+    setTranscript("");
+    setConversation([]);
+    setParameters({});
+    setIntent("");
+    setError("");
+    greetingPlayed.current = false;
+  };
+
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "#0B1020" }}>
       {/* Header */}
@@ -234,153 +316,97 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
         >
           <ArrowLeft size={20} color="#94A3B8" />
         </button>
-        <h1 className="text-lg font-bold text-white">Voice Assistant</h1>
+        <h1 className="text-lg font-bold text-white">Wayfinder Assistant</h1>
       </div>
 
-      <div className="flex-1 px-5 space-y-5 pb-8 flex flex-col">
-        {/* Mic area — takes up most of the screen */}
-        <GlassCard
-          className={`flex-1 p-6 text-center flex flex-col items-center justify-center transition-all duration-300 ${state === "result" ? "pb-4" : ""}`}
-          onClick={state === "idle" ? () => startRecording() : undefined}
+      <div className="flex-1 px-5 space-y-4 pb-8 flex flex-col">
+        {/* ── CHAT CONVERSATION ────────────────────────────── */}
+        <div
+          ref={chatRef}
+          className="flex-1 space-y-3 overflow-y-auto scroll-smooth pr-1"
+          style={{ maxHeight: "calc(100vh - 280px)" }}
         >
-          {state === "idle" && (
-            <motion.div
-              initial={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex flex-col items-center justify-center gap-5 flex-1"
-            >
-              {/* BIG MIC — 3xl = 208px diameter */}
-              <MicButton size="3xl" active={false} onClick={() => startRecording()} />
-              <VoiceWave active={false} size="lg" />
-              <p className="text-lg font-bold text-white">Tap to Speak</p>
-              <p className="text-sm text-[#94A3B8] -mt-2">Say something like "Book a flight from London to Paris tomorrow"</p>
-            </motion.div>
+          {conversation.length === 0 && state === "greeting" && (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 size={32} color="#4F46E5" className="animate-spin" />
+            </div>
           )}
 
-          {state === "listening" && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="flex flex-col items-center gap-5 flex-1 w-full"
-            >
-              <MicButton size="3xl" active={true} onClick={() => stopRecording()} />
-              <VoiceWave active={true} size="lg" />
-              <p className="text-lg font-bold text-[#4F46E5]">Listening...</p>
-              <p className="text-xs text-[#94A3B8] -mt-2">Tap mic to stop</p>
-
-              {/* REAL-TIME TRANSCRIPTION - prominent box below mic */}
-              <div
-                ref={transcriptRef}
-                className="w-full rounded-xl p-5 mt-3 max-h-48 overflow-y-auto"
-                style={{
-                  background: "rgba(79,70,229,0.08)",
-                  border: "1px solid rgba(79,70,229,0.2)",
-                }}
-                aria-live="polite"
-                aria-atomic="true"
-              >
-                {transcript ? (
-                  <p className="text-base italic text-white/90">"{transcript}"</p>
-                ) : (
-                  <p className="text-sm text-[#94A3B8]">Say something...</p>
-                )}
-              </div>
-            </motion.div>
-          )}
-
-          {state === "processing" && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="flex flex-col items-center gap-5 flex-1 justify-center"
-            >
-              <div
-                className="w-44 h-44 rounded-full flex items-center justify-center"
-                style={{ background: "linear-gradient(135deg,rgba(79,70,229,0.25),rgba(99,102,241,0.15))", border: "2px solid rgba(79,70,229,0.4)" }}
-              >
-                <Loader2 size={64} color="#4F46E5" className="animate-spin" />
-              </div>
-              <p className="text-lg font-bold text-white">Processing...</p>
-              {transcript && (
+          {conversation.map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === "assistant" ? "justify-start" : "justify-end"}`}>
+              {msg.role === "assistant" ? (
                 <div
-                  className="w-full max-w-md rounded-xl p-4"
-                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}
+                  className="max-w-[85%] rounded-2xl px-5 py-4 text-left"
+                  style={{
+                    background: "rgba(79,70,229,0.1)",
+                    border: "1px solid rgba(79,70,229,0.15)",
+                    borderBottomLeftRadius: i === conversation.length - 1 ? 4 : undefined,
+                  }}
                 >
-                  <p className="text-base italic text-white/80">"{transcript}"</p>
+                  <p className="text-sm font-semibold text-indigo-300 mb-1">
+                    {i === 0 ? "✈️ Wayfinder" : "Wayfinder"}
+                  </p>
+                  <p className="text-sm leading-relaxed text-white/90 whitespace-pre-wrap">{msg.text}</p>
+
+                  {/* Show detected parameters as tags */}
+                  {msg.parameters && Object.keys(msg.parameters).filter(k => !["session_id","offers","user_lang","missing","unknown_intent","error"].includes(k) && msg.parameters?.[k]).length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {Object.entries(msg.parameters).map(([key, val]) => {
+                        if (!val || ["session_id","offers","user_lang","missing","unknown_intent","error"].includes(key)) return null;
+                        return (
+                          <span key={key}
+                            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                            style={{ background: "rgba(79,70,229,0.15)", color: "#A5B4FC", border: "1px solid rgba(79,70,229,0.2)" }}
+                          >
+                            {key.replace(/_/g, " ")}: {String(val)}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div
+                  className="max-w-[75%] rounded-2xl px-4 py-3 text-left"
+                  style={{
+                    background: "rgba(99,102,241,0.2)",
+                    border: "1px solid rgba(99,102,241,0.25)",
+                    borderBottomRightRadius: 4,
+                  }}
+                >
+                  <p className="text-sm text-white/85">{msg.text}</p>
                 </div>
               )}
-            </motion.div>
-          )}
+            </div>
+          ))}
+        </div>
 
-          {state === "result" && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col items-center gap-4 flex-1 w-full"
-            >
-              <div
-                className="w-20 h-20 rounded-full flex items-center justify-center"
-                style={{ background: "linear-gradient(135deg,rgba(34,197,94,0.2),rgba(34,197,94,0.1))", border: "2px solid rgba(34,197,94,0.3)" }}
-              >
-                <Sparkles size={36} color="#22C55E" />
-              </div>
-              <p className="text-sm text-[#94A3B8]">You said:</p>
-              <p className="text-base font-semibold text-white/90 italic mb-1">"{transcript}"</p>
+        {/* ── LISTENING INDICATOR ──────────────────────────── */}
+        {state === "listening" && (
+          <div
+            className="flex items-center justify-center gap-3 py-3 rounded-xl"
+            style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.15)" }}
+          >
+            <VoiceWave active={true} size="sm" />
+            <p className="text-sm font-medium text-[#4F46E5]">Listening...</p>
+            <p className="text-xs text-[#64748B]">Tap mic to stop</p>
+          </div>
+        )}
 
-              <div
-                className="w-full rounded-xl p-5 text-left"
-                style={{ background: "rgba(79,70,229,0.1)", border: "1px solid rgba(79,70,229,0.2)" }}
-              >
-                <p className="text-base leading-relaxed text-white/90 whitespace-pre-wrap">{responseText}</p>
-              </div>
+        {state === "processing" && (
+          <div
+            className="flex items-center justify-center gap-3 py-3 rounded-xl"
+            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
+          >
+            <Loader2 size={18} color="#4F46E5" className="animate-spin" />
+            <p className="text-sm font-medium text-white/70">Thinking...</p>
+          </div>
+        )}
 
-              {/* Parameters section */}
-              {Object.keys(parameters).length > 0 && (
-                <div className="w-full mt-1">
-                  <p className="text-xs font-medium text-[#94A3B8] mb-2 uppercase tracking-wider">Detected Details</p>
-                  <div className="flex flex-wrap gap-2">
-                    {Object.entries(parameters).map(([key, val]) => {
-                      if (!val) return null;
-                      return (
-                        <span
-                          key={key}
-                          className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium"
-                          style={{ background: "rgba(79,70,229,0.12)", color: "#A5B4FC", border: "1px solid rgba(79,70,229,0.2)" }}
-                        >
-                          {key.replace(/_/g, " ")}: {String(val)}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Action button based on intent */}
-              <div className="w-full flex flex-col gap-2 mt-2">
-                {(intent === "search_flights" || intent === "book_flight") && parameters.origin && parameters.destination && (
-                  <PrimaryButton
-                    onClick={() => onNavigate("results", { parameters, intent })}
-                    icon={<ChevronRight size={18} />}
-                    className="w-full"
-                  >
-                    Show Flight Results
-                  </PrimaryButton>
-                )}
-                <button
-                  onClick={handleReset}
-                  className="text-sm font-medium text-[#94A3B8] py-2 hover:text-white transition-colors focus:outline-none"
-                >
-                  Start Over
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </GlassCard>
-
-        {/* Error display */}
+        {/* ── ERROR ───────────────────────────────────────── */}
         {error && (
           <div
-            className="rounded-xl p-4 text-center"
+            className="rounded-xl px-4 py-3 text-center"
             style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)" }}
           >
             <p className="text-sm text-red-400">{error}</p>
@@ -390,28 +416,63 @@ export default function VoiceScreen({ onNavigate }: { onNavigate: (screen: strin
           </div>
         )}
 
-        {/* Text input for typing (accessibility fallback) */}
-        {state !== "processing" && (
-          <div className="flex items-center gap-3">
-            <input
-              ref={inputRef}
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type a command... (e.g. 'book a flight from LHR to JFK')"
-              className="flex-1 rounded-2xl px-5 py-4 text-sm text-white placeholder-[#64748B] border border-white/8 focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent"
-              style={{ background: "rgba(21,28,47,0.7)" }}
-            />
+        {/* ── MIC BAR ─────────────────────────────────────── */}
+        <div
+          className="flex items-center gap-3 rounded-2xl px-4 py-3"
+          style={{ background: "rgba(21,28,47,0.8)", border: "1px solid rgba(255,255,255,0.06)" }}
+        >
+          {/* Mic button */}
+          <motion.button
+            onClick={state === "listening" ? stopRecording : startRecording}
+            disabled={state === "processing"}
+            className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 focus:outline-none focus:ring-2 focus:ring-[#4F46E5] disabled:opacity-40 ${state === "listening" ? "bg-gradient-to-br from-[#4F46E5] to-[#6366f1]" : "bg-white/10"}`}
+            whileTap={{ scale: 0.9 }}
+          >
+            {state === "listening" ? (
+              <MicOff size={22} color="#fff" />
+            ) : (
+              <Mic size={22} color={state === "processing" ? "#64748B" : "#fff"} />
+            )}
+          </motion.button>
+
+          {/* Text input */}
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={state === "listening" ? "Speak now..." : "Type a message..."}
+            className="flex-1 bg-transparent text-sm text-white placeholder-[#64748B] focus:outline-none"
+          />
+
+          {/* Send button */}
+          <button
+            onClick={handleSubmitText}
+            disabled={!inputText.trim() || state === "processing"}
+            className="w-10 h-10 rounded-xl flex items-center justify-center disabled:opacity-30 active:scale-90 transition-transform focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
+            style={{ background: inputText.trim() ? "linear-gradient(135deg,#4F46E5,#6366f1)" : "transparent" }}
+          >
+            <ChevronRight size={18} color="#fff" />
+          </button>
+
+          {/* Action button when ready to navigate */}
+          {state === "result" && intent === "search_flights" && parameters?.offers?.length > 0 && (
             <button
-              onClick={handleSubmitText}
-              disabled={!inputText.trim()}
-              className="w-14 h-14 rounded-2xl flex items-center justify-center disabled:opacity-40 active:scale-90 transition-transform focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
-              style={{ background: inputText.trim() ? "linear-gradient(135deg,#4F46E5,#6366f1)" : "#2D3B55" }}
+              onClick={() => onNavigate("results", { parameters, intent })}
+              className="rounded-xl px-4 py-2 text-xs font-semibold text-white whitespace-nowrap"
+              style={{ background: "linear-gradient(135deg,#22C55E,#16A34A)" }}
             >
-              <ChevronRight size={22} color="#fff" />
+              Results →
             </button>
-          </div>
+          )}
+        </div>
+
+        {/* Re-prompt hint after assistant responds */}
+        {state === "result" && !(intent === "search_flights" && parameters?.offers?.length > 0) && (
+          <p className="text-xs text-center text-[#64748B] -mt-2">
+            Tap the mic or type your reply to continue
+          </p>
         )}
       </div>
     </div>
