@@ -39,6 +39,8 @@ logger = logging.getLogger("wayfinder.voice_router")
 
 def _resolve_date(phrase: str) -> str:
     """Convert natural language date phrases to YYYY-MM-DD."""
+    if not phrase:
+        return ""
     today = date.today()
     lowered = phrase.strip().lower()
 
@@ -100,6 +102,8 @@ def _resolve_date(phrase: str) -> str:
 
 def _resolve_iata(city_or_code: str) -> str:
     """Resolve a city name or partial code to an IATA code."""
+    if not city_or_code:
+        return ""
     code = city_or_code.strip().upper()
     # If it's already a 3-letter IATA code, validate it
     if len(code) == 3 and get_airport(code):
@@ -432,10 +436,40 @@ async def _handle_search_flights(params: dict, response_text: str, session_id: s
     user_lang = params.get("user_lang", "")
 
     if not origin or not destination or not dep_date:
+        # Instead of returning generic error, ask for each missing field
+        # First, create/update session with whatever we have
+        sid = session_id
+        if not sid:
+            session_data = create_wizard_session()
+            sid = session_data["id"]
+
+        # Save what we already have
+        if origin:
+            process_step(sid, "origin", {"origin": origin})
+        if destination:
+            process_step(sid, "destination", {"destination": destination})
+        if dep_date:
+            process_step(sid, "departure_date", {"departure_date": dep_date})
+        process_step(sid, "current_step", {"current_step": "collecting_fields"})
+
+        # Check missing fields
+        missing = _get_missing_booking_fields(sid)
+        if not missing:
+            missing = ["origin", "destination", "departure_date"]
+        field_questions = {
+            "origin": "Where would you like to fly from?",
+            "destination": "Where would you like to go?",
+            "departure_date": "What date would you like to travel?",
+            "passenger_name": "What is the passenger's full name?",
+            "max_price": "Do you have a maximum budget for this trip?",
+        }
+        next_field = missing[0]
+        question = field_questions.get(next_field, f"Could you please tell me your {next_field}?")
+
         return VoiceCommandResponse(
-            intent="search_flights",
-            parameters=params,
-            response_text=_translate_response("I need an origin, destination, and date to search for flights.", user_lang),
+            intent="collect_booking_info",
+            parameters={"missing_fields": missing, "next_field": next_field, "session_id": sid, "user_lang": user_lang},
+            response_text=_translate_response(question, user_lang),
         )
 
     # Ensure we have valid airports
