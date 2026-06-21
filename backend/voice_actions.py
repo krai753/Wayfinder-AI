@@ -23,7 +23,7 @@ from wizard_manager import create_wizard_session, get_wizard_session, process_st
 
 logger = logging.getLogger("wayfinder.voice_actions")
 
-RETRY_THRESHOLD = 5
+RETRY_THRESHOLD = 3
 
 # ═══════════════════════════════════════════════════════════════════
 # RETRY TRACKING
