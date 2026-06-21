@@ -119,6 +119,12 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
+    # Add retry_count column to sessions for auto-CS escalation
+    try:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN retry_count INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
     # Add passengers column to bookings
     try:
         cursor.execute("ALTER TABLE bookings ADD COLUMN passengers INTEGER DEFAULT 1")
