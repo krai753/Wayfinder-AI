@@ -15,6 +15,7 @@ export default function CSCallHandler({ sessionId: initialSessionId }: { session
   const [callDuration, setCallDuration] = useState(0);
   const [lastMsgId, setLastMsgId] = useState(0);
   const [lastUserMsg, setLastUserMsg] = useState("");
+  const [bookingAnnouncement, setBookingAnnouncement] = useState("");
 
   const sessionIdRef = useRef(initialSessionId);
   const ticketIdRef = useRef("");
@@ -24,6 +25,7 @@ export default function CSCallHandler({ sessionId: initialSessionId }: { session
   const durationRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const lastMsgIdRef = useRef(0);
+  const checkedBookingRef = useRef<Record<string, boolean>>({});
 
   // Always start polling — sessionId starts empty but tickets may match later
   useEffect(() => {
@@ -97,10 +99,34 @@ export default function CSCallHandler({ sessionId: initialSessionId }: { session
         endCallUI();
         return;
       }
+
+      // ── BOOKING ANNOUNCEMENT (no call) ────────────────────
+      // If not in a call but we have a ticket, check for new BOOKING: messages
+      if (callState === "none" && ticket.id && !checkedBookingRef.current[ticket.id]) {
+        try {
+          const msgRes = await fetch(`${API}/cs/tickets/${ticket.id}/messages`);
+          const msgData = await msgRes.json();
+          const msgs = msgData.messages || [];
+          for (const m of msgs) {
+            if (m.sender === "system" && m.message.startsWith("BOOKING:")) {
+              checkedBookingRef.current[ticket.id] = true;
+              const bookingJson = JSON.parse(m.message.replace("BOOKING:", ""));
+              if (bookingJson.type === "booking_confirmed") {
+                const speech = `Your flight has been booked! ${bookingJson.airline} from ${bookingJson.origin} to ${bookingJson.destination} on ${bookingJson.date} for ${bookingJson.passenger_name}. Total ${bookingJson.total_amount}. Booking reference ${bookingJson.booking_reference}. Thank you for using Wayfinder!`;
+                setBookingAnnouncement(speech);
+                try { await api.speak(speech); } catch {}
+                // Auto-dismiss after 12 seconds
+                setTimeout(() => setBookingAnnouncement(""), 12000);
+              }
+              break;
+            }
+          }
+        } catch {}
+      }
     } catch (e) {
       // Silently retry
     }
-  }, [callState]);
+  }, [callState, setBookingAnnouncement]);
 
   // Play ringtone
   const playRingtone = useCallback(() => {
@@ -389,6 +415,23 @@ export default function CSCallHandler({ sessionId: initialSessionId }: { session
           </>
         )}
       </div>
+
+      {/* ── BOOKING ANNOUNCEMENT (no call) ─────────────── */}
+      {callState === "none" && bookingAnnouncement && (
+        <div
+          className="fixed bottom-6 left-4 right-4 z-[9999] rounded-2xl px-5 py-4 text-center shadow-2xl"
+          style={{
+            background: "linear-gradient(135deg, rgba(34,197,94,0.2), rgba(34,197,94,0.08))",
+            border: "1px solid rgba(34,197,94,0.3)",
+            backdropFilter: "blur(12px)",
+            maxWidth: "400px",
+            margin: "0 auto",
+          }}
+        >
+          <p className="text-sm font-bold text-[#22C55E] mb-1">✈️ Flight Booked!</p>
+          <p className="text-xs text-[#94A3B8]">{bookingAnnouncement}</p>
+        </div>
+      )}
     </div>
   );
 }
