@@ -240,6 +240,8 @@ async def agent_book_for_user(
             "DUBLIN": "DUB",
             "MANCHESTER": "MAN",
             "BERLIN": "BER",
+            "DHAKA": "DAC",
+            "JAPAN": "NRT",
         }
         if location in PRIORITY:
             chosen_iata = PRIORITY[location]

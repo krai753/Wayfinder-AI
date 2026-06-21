@@ -6,6 +6,19 @@ import { api } from "../../services/api";
 const POLL_INTERVAL = 3000;
 const API = import.meta.env.VITE_API_BASE?.replace(/\/$/, "") || window.location.origin + "/api";
 
+/** Play an MP3 blob through the browser's Audio element */
+async function playAudioBlob(blob: Blob): Promise<void> {
+  if (!blob || blob.size === 0) return;
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  return new Promise((resolve) => {
+    audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+    audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+    const p = audio.play();
+    if (p) p.catch(() => { URL.revokeObjectURL(url); resolve(); });
+  });
+}
+
 export default function CSCallHandler({ sessionId: initialSessionId }: { sessionId: string }) {
   const [callState, setCallState] = useState<"none" | "ringing" | "connected" | "ended">("none");
   const [callerName, setCallerName] = useState("Agent");
@@ -114,7 +127,7 @@ export default function CSCallHandler({ sessionId: initialSessionId }: { session
               if (bookingJson.type === "booking_confirmed") {
                 const speech = `Your flight has been booked! ${bookingJson.airline} from ${bookingJson.origin} to ${bookingJson.destination} on ${bookingJson.date} for ${bookingJson.passenger_name}. Total ${bookingJson.total_amount}. Booking reference ${bookingJson.booking_reference}. Thank you for using Wayfinder!`;
                 setBookingAnnouncement(speech);
-                try { await api.speak(speech); } catch {}
+                try { const blob = await api.speak(speech); await playAudioBlob(blob); } catch {}
                 // Auto-dismiss after 12 seconds
                 setTimeout(() => setBookingAnnouncement(""), 12000);
               }
@@ -182,7 +195,7 @@ export default function CSCallHandler({ sessionId: initialSessionId }: { session
             if (bookingJson.type === "booking_confirmed") {
               const speech = `Your flight has been booked! ${bookingJson.airline} from ${bookingJson.origin} to ${bookingJson.destination} on ${bookingJson.date} for ${bookingJson.passenger_name}. Total ${bookingJson.total_amount}. Booking reference ${bookingJson.booking_reference}. Thank you for using Wayfinder!`;
               setTranscript(speech);
-              try { await api.speak(speech); } catch {}
+              try { const blob = await api.speak(speech); await playAudioBlob(blob); } catch {}
             }
           } catch {}
         }
@@ -190,7 +203,7 @@ export default function CSCallHandler({ sessionId: initialSessionId }: { session
         if (m.id > lastMsgIdRef.current && m.sender === "agent") {
           lastMsgIdRef.current = m.id;
           setLastMsgId(m.id);
-          try { await api.speak(m.message); } catch {}
+          try { const blob = await api.speak(m.message); await playAudioBlob(blob); } catch {}
         }
       }
     } catch {}
@@ -292,132 +305,143 @@ export default function CSCallHandler({ sessionId: initialSessionId }: { session
     return `${m}:${s}`;
   };
 
-  if (callState === "none") return null;
+  // No call overlay and no booking → render invisible anchor to keep polling alive
+  const showCallOverlay = callState !== "none";
+  const showBookingBanner = callState === "none" && bookingAnnouncement;
+
+  if (!showCallOverlay && !showBookingBanner) {
+    return <div id="cs-call-handler" style={{ display: "none" }} />;
+  }
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ background: "rgba(6,9,18,0.95)" }}>
-      <div className="flex flex-col items-center gap-8 px-8 w-full max-w-sm">
-        {/* ── RINGING ──────────────────── */}
-        {callState === "ringing" && (
-          <>
-            <motion.div
-              animate={{ scale: [1, 1.1, 1] }}
-              transition={{ duration: 1.5, repeat: Infinity }}
-              className="w-28 h-28 rounded-full flex items-center justify-center"
-              style={{
-                background: "linear-gradient(135deg,rgba(34,197,94,0.2),rgba(34,197,94,0.1))",
-                border: "3px solid rgba(34,197,94,0.3)",
-              }}
-            >
-              <PhoneIncoming size={48} color="#22C55E" />
-            </motion.div>
-            <div className="text-center">
-              <p className="text-xl font-bold text-white mb-1">Incoming Call</p>
-              <p className="text-sm text-[#22C55E] font-semibold">{callerName}</p>
-              <p className="text-xs text-[#64748B] mt-2">Customer Support</p>
-            </div>
-            <div className="flex gap-8">
-              <button
-                onClick={endCall}
-                className="w-20 h-20 rounded-full flex items-center justify-center"
-                style={{ background: "rgba(239,68,68,0.15)", border: "3px solid rgba(239,68,68,0.3)" }}
-              >
-                <PhoneOff size={32} color="#EF4444" />
-              </button>
-              <button
-                onClick={acceptCall}
-                className="w-20 h-20 rounded-full flex items-center justify-center"
-                style={{ background: "rgba(34,197,94,0.15)", border: "3px solid rgba(34,197,94,0.3)" }}
-              >
-                <Phone size={32} color="#22C55E" />
-              </button>
-            </div>
-            <p className="text-xs text-[#64748B]">Decline · Accept</p>
-          </>
-        )}
-
-        {/* ── CONNECTED ─────────────────── */}
-        {callState === "connected" && (
-          <>
-            <div className="w-28 h-28 rounded-full flex items-center justify-center" style={{ background: "rgba(34,197,94,0.12)", border: "3px solid rgba(34,197,94,0.2)" }}>
-              <Phone size={40} color="#22C55E" />
-            </div>
-            <div className="text-center">
-              <p className="text-lg font-bold text-white">{callerName}</p>
-              <p className="text-sm text-[#22C55E] font-mono">{formatTime(callDuration)}</p>
-            </div>
-
-            {/* Transcript */}
-            {transcript && (
-              <div className="rounded-xl px-5 py-3 text-center w-full" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                <p className="text-sm text-[#94A3B8]">{transcript}</p>
-              </div>
+    <>
+      {/* ── CALL OVERLAY ────────────────── */}
+      {showCallOverlay && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ background: "rgba(6,9,18,0.95)" }}>
+          <div className="flex flex-col items-center gap-8 px-8 w-full max-w-sm">
+            {/* ── RINGING ──────────────────── */}
+            {callState === "ringing" && (
+              <>
+                <motion.div
+                  animate={{ scale: [1, 1.1, 1] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                  className="w-28 h-28 rounded-full flex items-center justify-center"
+                  style={{
+                    background: "linear-gradient(135deg,rgba(34,197,94,0.2),rgba(34,197,94,0.1))",
+                    border: "3px solid rgba(34,197,94,0.3)",
+                  }}
+                >
+                  <PhoneIncoming size={48} color="#22C55E" />
+                </motion.div>
+                <div className="text-center">
+                  <p className="text-xl font-bold text-white mb-1">Incoming Call</p>
+                  <p className="text-sm text-[#22C55E] font-semibold">{callerName}</p>
+                  <p className="text-xs text-[#64748B] mt-2">Customer Support</p>
+                </div>
+                <div className="flex gap-8">
+                  <button
+                    onClick={endCall}
+                    className="w-20 h-20 rounded-full flex items-center justify-center"
+                    style={{ background: "rgba(239,68,68,0.15)", border: "3px solid rgba(239,68,68,0.3)" }}
+                  >
+                    <PhoneOff size={32} color="#EF4444" />
+                  </button>
+                  <button
+                    onClick={acceptCall}
+                    className="w-20 h-20 rounded-full flex items-center justify-center"
+                    style={{ background: "rgba(34,197,94,0.15)", border: "3px solid rgba(34,197,94,0.3)" }}
+                  >
+                    <Phone size={32} color="#22C55E" />
+                  </button>
+                </div>
+                <p className="text-xs text-[#64748B]">Decline · Accept</p>
+              </>
             )}
 
-            {/* Voice wave */}
-            <div className="flex items-center gap-1" aria-hidden="true">
-              {[30, 50, 70, 90, 100, 90, 70, 50, 30].map((h, i) => (
-                <motion.div
-                  key={i}
-                  className="rounded-full"
+            {/* ── CONNECTED ─────────────────── */}
+            {callState === "connected" && (
+              <>
+                <div className="w-28 h-28 rounded-full flex items-center justify-center" style={{ background: "rgba(34,197,94,0.12)", border: "3px solid rgba(34,197,94,0.2)" }}>
+                  <Phone size={40} color="#22C55E" />
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold text-white">{callerName}</p>
+                  <p className="text-sm text-[#22C55E] font-mono">{formatTime(callDuration)}</p>
+                </div>
+
+                {/* Transcript */}
+                {transcript && (
+                  <div className="rounded-xl px-5 py-3 text-center w-full" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                    <p className="text-sm text-[#94A3B8]">{transcript}</p>
+                  </div>
+                )}
+
+                {/* Voice wave */}
+                <div className="flex items-center gap-1" aria-hidden="true">
+                  {[30, 50, 70, 90, 100, 90, 70, 50, 30].map((h, i) => (
+                    <motion.div
+                      key={i}
+                      className="rounded-full"
+                      style={{
+                        width: 4,
+                        background: isSpeaking ? "linear-gradient(180deg,#4F46E5,#22C55E)" : "rgba(255,255,255,0.15)",
+                      }}
+                      animate={isSpeaking ? { height: [h * 0.3, h, h * 0.5, h * 0.8, h * 0.3] } : { height: 6 }}
+                      transition={isSpeaking ? { duration: 0.8 + i * 0.1, repeat: Infinity, ease: "easeInOut", delay: i * 0.08 } : { duration: 0.3 }}
+                    />
+                  ))}
+                </div>
+
+                {/* Mic button */}
+                <button
+                  onClick={isSpeaking ? stopRecording : startRecording}
+                  className="w-24 h-24 rounded-full flex items-center justify-center"
                   style={{
-                    width: 4,
-                    background: isSpeaking ? "linear-gradient(180deg,#4F46E5,#22C55E)" : "rgba(255,255,255,0.15)",
+                    background: isSpeaking ? "linear-gradient(135deg,#4F46E5,#6366f1)" : "rgba(255,255,255,0.06)",
+                    border: isSpeaking ? "3px solid rgba(255,255,255,0.2)" : "3px solid rgba(255,255,255,0.1)",
+                    boxShadow: isSpeaking ? "0 0 40px rgba(79,70,229,0.4)" : "none",
                   }}
-                  animate={isSpeaking ? { height: [h * 0.3, h, h * 0.5, h * 0.8, h * 0.3] } : { height: 6 }}
-                  transition={isSpeaking ? { duration: 0.8 + i * 0.1, repeat: Infinity, ease: "easeInOut", delay: i * 0.08 } : { duration: 0.3 }}
-                />
-              ))}
-            </div>
+                >
+                  {isSpeaking ? <MicOff size={36} color="#fff" /> : <Mic size={36} color="#fff" />}
+                </button>
+                <p className="text-xs text-[#64748B]">{isSpeaking ? "Tap to stop" : "Tap to speak"}</p>
 
-            {/* Mic button */}
-            <button
-              onClick={isSpeaking ? stopRecording : startRecording}
-              className="w-24 h-24 rounded-full flex items-center justify-center"
-              style={{
-                background: isSpeaking ? "linear-gradient(135deg,#4F46E5,#6366f1)" : "rgba(255,255,255,0.06)",
-                border: isSpeaking ? "3px solid rgba(255,255,255,0.2)" : "3px solid rgba(255,255,255,0.1)",
-                boxShadow: isSpeaking ? "0 0 40px rgba(79,70,229,0.4)" : "none",
-              }}
-            >
-              {isSpeaking ? <MicOff size={36} color="#fff" /> : <Mic size={36} color="#fff" />}
-            </button>
-            <p className="text-xs text-[#64748B]">{isSpeaking ? "Tap to stop" : "Tap to speak"}</p>
+                {/* Hang up */}
+                <button
+                  onClick={endCall}
+                  className="w-16 h-16 rounded-full flex items-center justify-center"
+                  style={{ background: "rgba(239,68,68,0.15)", border: "3px solid rgba(239,68,68,0.3)" }}
+                >
+                  <PhoneOff size={24} color="#EF4444" />
+                </button>
+              </>
+            )}
 
-            {/* Hang up */}
-            <button
-              onClick={endCall}
-              className="w-16 h-16 rounded-full flex items-center justify-center"
-              style={{ background: "rgba(239,68,68,0.15)", border: "3px solid rgba(239,68,68,0.3)" }}
-            >
-              <PhoneOff size={24} color="#EF4444" />
-            </button>
-          </>
-        )}
+            {/* ── ENDED ─────────────────────── */}
+            {callState === "ended" && (
+              <>
+                <div className="w-28 h-28 rounded-full flex items-center justify-center" style={{ background: "rgba(148,163,184,0.1)", border: "3px solid rgba(148,163,184,0.2)" }}>
+                  <PhoneOff size={40} color="#64748B" />
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold text-white mb-1">Call Ended</p>
+                  <p className="text-xs text-[#64748B]">{callerName} · {formatTime(callDuration)}</p>
+                </div>
+                <button
+                  onClick={() => setCallState("none")}
+                  className="px-6 py-3 rounded-xl text-sm font-semibold text-white"
+                  style={{ background: "rgba(79,70,229,0.15)", border: "1px solid rgba(79,70,229,0.2)" }}
+                >
+                  Back to App
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
-        {/* ── ENDED ─────────────────────── */}
-        {callState === "ended" && (
-          <>
-            <div className="w-28 h-28 rounded-full flex items-center justify-center" style={{ background: "rgba(148,163,184,0.1)", border: "3px solid rgba(148,163,184,0.2)" }}>
-              <PhoneOff size={40} color="#64748B" />
-            </div>
-            <div className="text-center">
-              <p className="text-lg font-bold text-white mb-1">Call Ended</p>
-              <p className="text-xs text-[#64748B]">{callerName} · {formatTime(callDuration)}</p>
-            </div>
-            <button
-              onClick={() => setCallState("none")}
-              className="px-6 py-3 rounded-xl text-sm font-semibold text-white"
-              style={{ background: "rgba(79,70,229,0.15)", border: "1px solid rgba(79,70,229,0.2)" }}
-            >
-              Back to App
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* ── BOOKING ANNOUNCEMENT (no call) ─────────────── */}
-      {callState === "none" && bookingAnnouncement && (
+      {/* ── BOOKING ANNOUNCEMENT ──────────────── */}
+      {showBookingBanner && (
         <div
           className="fixed bottom-6 left-4 right-4 z-[9999] rounded-2xl px-5 py-4 text-center shadow-2xl"
           style={{
@@ -432,6 +456,6 @@ export default function CSCallHandler({ sessionId: initialSessionId }: { session
           <p className="text-xs text-[#94A3B8]">{bookingAnnouncement}</p>
         </div>
       )}
-    </div>
+    </>
   );
 }
