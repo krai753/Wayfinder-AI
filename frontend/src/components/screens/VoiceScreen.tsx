@@ -97,6 +97,8 @@ export default function VoiceScreen({
   const inputRef = useRef<HTMLInputElement>(null);
   const audioUnlocked = useRef(false);
   const greetingText = useRef(generateGreeting());
+  const greetingPlayedRef = useRef(false);
+  const initialPlayedRef = useRef(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
@@ -382,7 +384,11 @@ export default function VoiceScreen({
         setTimeout(() => startRecording(), 300);
         return;
       }
-      await playGreeting();
+      // Only play greeting on the very first interaction
+      if (!greetingPlayedRef.current) {
+        await playGreeting();
+        greetingPlayedRef.current = true;
+      }
       await startRecording();
     }
   }, [state, unlockAudio, playGreeting, startRecording, handleReset, stopAudio, stopRecording]);
@@ -459,6 +465,18 @@ export default function VoiceScreen({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleSubmitText();
   };
+
+  // Play greeting once on mount (NOT on every mic tap)
+  useEffect(() => {
+    if (!initialPlayedRef.current) {
+      initialPlayedRef.current = true;
+      const timer = setTimeout(async () => {
+        await playTts(greetingText.current);
+        greetingPlayedRef.current = true;
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [playTts]);
 
   // Cleanup on unmount
   useEffect(() => {
