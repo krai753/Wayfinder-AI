@@ -25,13 +25,10 @@ export default function CSCallHandler({ sessionId: initialSessionId }: { session
   const audioChunksRef = useRef<Blob[]>([]);
   const lastMsgIdRef = useRef(0);
 
-  // Update sessionId if it changes
+  // Always start polling — sessionId starts empty but tickets may match later
   useEffect(() => {
-    if (initialSessionId) {
-      sessionIdRef.current = initialSessionId;
-      // Start polling for CS calls
-      startPolling();
-    }
+    sessionIdRef.current = initialSessionId;
+    startPolling();
     return () => stopPolling();
   }, [initialSessionId]);
 
@@ -48,67 +45,57 @@ export default function CSCallHandler({ sessionId: initialSessionId }: { session
     }
   }, []);
 
+  // Find best matching ticket — by session_id, or fall back to most recent open ticket
+  const findTicket = useCallback((tickets: any[]): any | null => {
+    const openTickets = tickets.filter((t: any) => t.status !== "closed");
+    // Prefer by session_id
+    if (sessionIdRef.current) {
+      const bySession = openTickets.find((t: any) => t.session_id === sessionIdRef.current);
+      if (bySession) return bySession;
+    }
+    // Fall back to most recent open ticket
+    const sorted = [...openTickets].sort(
+      (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    return sorted[0] || null;
+  }, []);
+
   // Check if there's an active CS ticket with a call
   const checkForCall = useCallback(async () => {
     try {
-      // Get all open tickets for this session
-      const res = await fetch(`${API}/cs/tickets?status=open`);
+      const res = await fetch(`${API}/cs/tickets`);
       const data = await res.json();
+      const ticket = findTicket(data.tickets || []);
+      if (!ticket) return;
 
-      // Also check assigned tickets (in case agent already accepted)
-      const res2 = await fetch(`${API}/cs/tickets`);
-      const data2 = await res2.json();
+      const cs = ticket.call_status;
 
-      const allTickets = [...(data.tickets || []), ...(data2.tickets || [])];
-      const myTicket = allTickets.find(
-        (t: any) => t.session_id === sessionIdRef.current
-      );
-
-      if (!myTicket) {
-        // Try to find by checking all tickets
-        const allRes = await fetch(`${API}/cs/tickets`);
-        const allData = await allRes.json();
-        const anyTicket = (allData.tickets || []).find(
-          (t: any) => t.session_id === sessionIdRef.current
-        );
-        if (!anyTicket) return;
-        
-        if (anyTicket.call_status === "calling" && callState === "none") {
-          setTicketId(anyTicket.id);
-          ticketIdRef.current = anyTicket.id;
-          setCallerName(anyTicket.call_agent || "CS Agent");
-          setCallState("ringing");
-          playRingtone();
-        } else if (anyTicket.call_status === "in_call" && callState !== "connected") {
-          setTicketId(anyTicket.id);
-          ticketIdRef.current = anyTicket.id;
-          setCallerName(anyTicket.call_agent || "CS Agent");
-          setCallState("connected");
-          setCallDuration(0);
-          startDurationTimer();
-          pollMessages();
-        } else if (anyTicket.call_status === "ended" && callState === "connected") {
-          endCallUI();
-        }
+      // Ringing → user hasn't answered yet
+      if (cs === "calling" && callState === "none") {
+        setTicketId(ticket.id);
+        ticketIdRef.current = ticket.id;
+        setCallerName(ticket.call_agent || "CS Agent");
+        setCallState("ringing");
+        playRingtone();
         return;
       }
 
-      if (myTicket.call_status === "calling" && callState === "none") {
-        setTicketId(myTicket.id);
-        ticketIdRef.current = myTicket.id;
-        setCallerName(myTicket.call_agent || "CS Agent");
-        setCallState("ringing");
-        playRingtone();
-      } else if (myTicket.call_status === "in_call" && callState !== "connected") {
-        setTicketId(myTicket.id);
-        ticketIdRef.current = myTicket.id;
-        setCallerName(myTicket.call_agent || "CS Agent");
+      // Connected → call is active
+      if (cs === "in_call" && callState !== "connected") {
+        setTicketId(ticket.id);
+        ticketIdRef.current = ticket.id;
+        setCallerName(ticket.call_agent || "CS Agent");
         setCallState("connected");
         setCallDuration(0);
         startDurationTimer();
         pollMessages();
-      } else if (myTicket.call_status === "ended" && callState === "connected") {
+        return;
+      }
+
+      // Ended → tear down call UI
+      if (cs === "ended" && callState === "connected") {
         endCallUI();
+        return;
       }
     } catch (e) {
       // Silently retry
