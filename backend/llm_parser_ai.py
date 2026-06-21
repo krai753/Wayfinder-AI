@@ -36,6 +36,10 @@ VALID INTENTS:
 - reschedule_booking: User wants to change flight date
 - view_history: User wants to see past trips
 - view_portfolio: User wants travel stats
+- cs_escalation: User EXPLICITLY asks to speak to a human agent, customer service, support, or representative.
+  Use this when the user says things like "talk to a human", "connect me to an agent",
+  "I want to speak to customer service", "get me a real person", "human support", "agent please".
+  Do NOT use this for general help — only for explicit requests to speak to a human.
 - help: User asks what you can do, or says something NOT about flights
 - unknown: Cannot determine intent
 

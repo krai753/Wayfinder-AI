@@ -436,6 +436,11 @@ class LLMOrchestrator:
 
         # Detect intent
         is_help = any(w in text_lower for w in ["help", "what can you", "how does", "hello", "hi ", "what do you"])
+        is_cs_escalation = any(w in text_lower for w in [
+            "human", "real person", "real agent", "customer service", "customer support",
+            "talk to someone", "talk to a person", "connect me", "agent please",
+            "speak to an agent", "speak to a human", "get me a human",
+        ])
         is_history = any(w in text_lower for w in ["history", "past flights", "my trips", "show my flights",
                                                      "flight history", "previous booking", "what i booked"])
         is_portfolio = any(w in text_lower for w in ["portfolio", "stats", "how many flights",
@@ -496,6 +501,15 @@ class LLMOrchestrator:
                 "parameters": {"position": str(position), "user_lang": user_lang},
                 "response_text": response_text,
             }
+
+        # CS ESCALATION — user asks for human agent
+        if is_cs_escalation:
+            response_en = "Let me connect you to a customer service agent right away. Please hold the line."
+            if user_lang != "en":
+                response_text = _translate_text(response_en, user_lang)
+            else:
+                response_text = response_en
+            return {"intent": "cs_escalation", "parameters": {"reason": "user_requested"}, "response_text": response_text}
 
         # HELP
         if is_help and not is_search and not is_cancel:

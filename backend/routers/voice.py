@@ -351,6 +351,23 @@ async def voice_command(req: VoiceCommandRequest):
                 ),
             )
 
+        elif intent == "cs_escalation":
+            # Create a CS ticket and route
+            from database import create_cs_ticket
+            sid = req.session_id or ""
+            ticket_id = f"TKT{uuid.uuid4().hex[:8].upper()}"
+            user_name = "Guest"
+            if sid:
+                session = get_wizard_session(sid)
+                if session and session.get("passenger_name"):
+                    user_name = session["passenger_name"]
+            create_cs_ticket(ticket_id, session_id=sid, user_name=user_name, issue="User requested human agent")
+            return VoiceCommandResponse(
+                intent="cs_escalation",
+                parameters={"reason": "user_requested", "ticket_id": ticket_id, "session_id": sid},
+                response_text=response_text or "Let me connect you to a customer service agent right away. Please hold the line.",
+            )
+
         else:
             return VoiceCommandResponse(
                 intent="help",
