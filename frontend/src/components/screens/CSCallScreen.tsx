@@ -32,6 +32,7 @@ export default function CSCallHandler({ sessionId: initialSessionId }: { session
 
   const sessionIdRef = useRef(initialSessionId);
   const ticketIdRef = useRef("");
+  const callStateRef = useRef(callState);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -46,6 +47,11 @@ export default function CSCallHandler({ sessionId: initialSessionId }: { session
     startPolling();
     return () => stopPolling();
   }, [initialSessionId]);
+
+  // Keep ref in sync for use in pollMessages (avoids stale closure)
+  useEffect(() => {
+    callStateRef.current = callState;
+  }, [callState]);
 
   const startPolling = useCallback(() => {
     stopPolling();
@@ -100,6 +106,7 @@ export default function CSCallHandler({ sessionId: initialSessionId }: { session
         setTicketId(ticket.id);
         ticketIdRef.current = ticket.id;
         setCallerName(ticket.call_agent || "CS Agent");
+        callStateRef.current = "connected";
         setCallState("connected");
         setCallDuration(0);
         startDurationTimer();
@@ -207,10 +214,10 @@ export default function CSCallHandler({ sessionId: initialSessionId }: { session
         }
       }
     } catch {}
-    if (callState === "connected") {
+    if (callStateRef.current === "connected") {
       setTimeout(pollMessages, 2000);
     }
-  }, [callState]);
+  }, []);
 
   // Accept call
   const acceptCall = useCallback(async () => {
