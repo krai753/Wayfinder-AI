@@ -245,7 +245,9 @@ export default function VoiceScreen({
           setState("processing");
 
           // Send text to voice command API (with 25s timeout)
-          const sid = sessionIdRef.current;
+          // Use session_id from ref, state, or localStorage as fallback
+          const sid = sessionIdRef.current || sessionId || localStorage.getItem("wayfinder_sid") || "";
+          if (sid) localStorage.setItem("wayfinder_sid", sid);
           const timeoutPromise = new Promise((_, reject) =>
             setTimeout(() => reject(new Error("Request timed out. Please try again.")), 25000)
           );
@@ -254,11 +256,13 @@ export default function VoiceScreen({
             timeoutPromise,
           ]) as any;
 
-          // Save session ID for continued conversation
+          // Save session ID for continued conversation — store in state, ref, and localStorage
           if (cmdResult.parameters?.session_id) {
-            setSessionId(cmdResult.parameters.session_id);
-            sessionIdRef.current = cmdResult.parameters.session_id;
-            onNavigate("session_update", { session_id: cmdResult.parameters.session_id });
+            const newSid = cmdResult.parameters.session_id;
+            setSessionId(newSid);
+            sessionIdRef.current = newSid;
+            localStorage.setItem("wayfinder_sid", newSid);
+            onNavigate("session_update", { session_id: newSid });
           }
 
           // Speak the response
@@ -418,8 +422,10 @@ export default function VoiceScreen({
       ]) as any;
 
       if (result.parameters?.session_id) {
-        setSessionId(result.parameters.session_id);
-        sessionIdRef.current = result.parameters.session_id;
+        const newSid = result.parameters.session_id;
+        setSessionId(newSid);
+        sessionIdRef.current = newSid;
+        localStorage.setItem("wayfinder_sid", newSid);
       }
 
       setState("speaking");

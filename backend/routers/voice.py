@@ -6,6 +6,7 @@ Now delegates intent handlers to voice_actions.py and shared helpers to helpers.
 import json
 import logging
 import uuid
+import asyncio
 from datetime import datetime, date
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, File, UploadFile, Query
@@ -84,10 +85,17 @@ async def voice_command(req: VoiceCommandRequest):
                 "destination": session.get("destination"),
                 "departure_date": session.get("departure_date"),
             }
+    logger.info(f"[DEBUG] voice_command: text={req.text!r}, session_id={req.session_id!r}, context={context}")
 
     # 2. AI parses the command (LLM first, rule-based fallback)
     try:
-        ai_result = await ai_parser.parse(req.text, context)
+        # Timeout wrapper — AI parser sometimes hangs
+        ai_task = asyncio.create_task(ai_parser.parse(req.text, context or {}))
+        try:
+            ai_result = await asyncio.wait_for(ai_task, timeout=15.0)
+        except asyncio.TimeoutError:
+            logger.warning(f"AI parser timed out for text={req.text!r}, falling back to rule-based")
+            ai_result = None
         if ai_result:
             result = ai_result
             logger.info(f"AI parser → intent={result['intent']}")
