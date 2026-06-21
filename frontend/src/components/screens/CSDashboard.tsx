@@ -138,8 +138,8 @@ export default function CSDashboard() {
       return;
     }
     if (!bkName.trim()) { setBkResult({ msg: "Enter passenger name", type: "error" }); return; }
-    if (!bkOrigin.trim() || bkOrigin.trim().length !== 3) { setBkResult({ msg: "Enter 3-letter origin IATA (e.g. LHR)", type: "error" }); return; }
-    if (!bkDest.trim() || bkDest.trim().length !== 3) { setBkResult({ msg: "Enter 3-letter destination IATA (e.g. NRT)", type: "error" }); return; }
+    if (!bkOrigin.trim()) { setBkResult({ msg: "Enter origin city or IATA (e.g. London, LHR)", type: "error" }); return; }
+    if (!bkDest.trim()) { setBkResult({ msg: "Enter destination city or IATA (e.g. Tokyo, NRT)", type: "error" }); return; }
     if (!bkDate) { setBkResult({ msg: "Select a departure date", type: "error" }); return; }
 
     setBkLoading(true);
@@ -371,16 +371,16 @@ export default function CSDashboard() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[10px] font-semibold text-[#64748B] uppercase tracking-wider mb-1">Origin</label>
-                      <input value={bkOrigin} onChange={(e) => setBkOrigin(e.target.value.toUpperCase())}
-                        placeholder="LHR" maxLength={3}
-                        className="w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-[#475569] focus:outline-none uppercase"
+                      <input value={bkOrigin} onChange={(e) => setBkOrigin(e.target.value)}
+                        placeholder="e.g. London, Tokyo, or LHR"
+                        className="w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-[#475569] focus:outline-none"
                         style={{ background: "rgba(21,28,47,0.8)", border: "1px solid rgba(255,255,255,0.08)" }} />
                     </div>
                     <div>
                       <label className="block text-[10px] font-semibold text-[#64748B] uppercase tracking-wider mb-1">Destination</label>
-                      <input value={bkDest} onChange={(e) => setBkDest(e.target.value.toUpperCase())}
-                        placeholder="NRT" maxLength={3}
-                        className="w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-[#475569] focus:outline-none uppercase"
+                      <input value={bkDest} onChange={(e) => setBkDest(e.target.value)}
+                        placeholder="e.g. Paris, New York, or NRT"
+                        className="w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-[#475569] focus:outline-none"
                         style={{ background: "rgba(21,28,47,0.8)", border: "1px solid rgba(255,255,255,0.08)" }} />
                     </div>
                   </div>

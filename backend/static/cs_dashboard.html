@@ -168,8 +168,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         <div class="booking-form">
           <div class="grid">
             <div class="full"><label>Passenger Full Name</label><input id="bkName" placeholder="e.g. John Smith"></div>
-            <div><label>Origin</label><input id="bkOrigin" placeholder="e.g. LHR" maxlength="3" style="text-transform:uppercase"></div>
-            <div><label>Destination</label><input id="bkDest" placeholder="e.g. NRT" maxlength="3" style="text-transform:uppercase"></div>
+            <div><label>Origin</label><input id="bkOrigin" placeholder="e.g. London, Tokyo, or LHR"></div>
+            <div><label>Destination</label><input id="bkDest" placeholder="e.g. Paris, New York, or NRT"></div>
             <div><label>Departure Date</label><input id="bkDate" type="date"></div>
             <div><label>Passengers</label><select id="bkPassengers"><option value="1">1 Adult</option><option value="2">2 Adults</option><option value="3">3 Adults</option><option value="4">4 Adults</option><option value="5">5 Adults</option></select></div>
             <div><label>Cabin Class</label><select id="bkSeat"><option value="economy">Economy</option><option value="premium_economy">Premium Economy</option><option value="business">Business</option><option value="first">First Class</option></select></div>
@@ -455,8 +455,8 @@ async function agentBookFlight() {
   const seat = document.getElementById('bkSeat').value;
   const budget = document.getElementById('bkBudget').value;
   if (!name) return showBookingResult('Enter passenger name', 'error');
-  if (!origin || origin.length !== 3) return showBookingResult('Enter 3-letter origin IATA (e.g. LHR)', 'error');
-  if (!dest || dest.length !== 3) return showBookingResult('Enter 3-letter destination IATA (e.g. NRT)', 'error');
+  if (!origin) return showBookingResult('Enter origin city or IATA (e.g. London, LHR)', 'error');
+  if (!dest) return showBookingResult('Enter destination city or IATA (e.g. Tokyo, NRT)', 'error');
   if (!date) return showBookingResult('Select a departure date', 'error');
   if (!activeTicketId) return showBookingResult('Select a ticket first', 'error');
 

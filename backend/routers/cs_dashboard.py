@@ -175,8 +175,8 @@ async def get_call_status(ticket_id: str):
 @router.post("/book-for-user")
 async def agent_book_for_user(
     ticket_id: str = Query(..., description="CS ticket ID"),
-    origin: str = Query(..., min_length=3, max_length=3, description="Origin IATA"),
-    destination: str = Query(..., min_length=3, max_length=3, description="Destination IATA"),
+    origin: str = Query(..., description="Origin city name or IATA code"),
+    destination: str = Query(..., description="Destination city name or IATA code"),
     departure_date: str = Query(..., description="YYYY-MM-DD"),
     passenger_name: str = Query(..., description="Full passenger name"),
     passengers: int = Query(1, ge=1, le=9),
@@ -186,14 +186,30 @@ async def agent_book_for_user(
     """
     Agent books a flight on behalf of a user end-to-end.
     1. Verifies ticket exists
-    2. Searches Duffel for available flights
-    3. Picks cheapest (within budget if specified)
-    4. Creates wizard session & saves offer
-    5. Books via Duffel (or mock fallback)
-    6. Sends BOOKING: structured message to ticket for TTS announcement
-    7. Returns booking details
+    2. Resolves city names to IATA codes
+    3. Searches Duffel for available flights
+    4. Picks cheapest (within budget if specified)
+    5. Creates wizard session & saves offer
+    6. Books via Duffel (or mock fallback)
+    7. Sends BOOKING: structured message to ticket for TTS announcement
+    8. Returns booking details
     """
-    logger.info(f"📞 Agent booking for ticket {ticket_id}: {origin} → {destination} on {departure_date}")
+    from airport_data import search_airports
+
+    def resolve_code(location: str) -> str:
+        """Resolve a city name or IATA code. Returns 3-letter IATA."""
+        location = location.strip().upper()
+        if len(location) == 3 and location.isalpha():
+            return location  # Already an IATA code
+        results = search_airports(location, limit=5)
+        if not results:
+            raise HTTPException(status_code=400, detail=f"Could not find airport for: {location}")
+        return results[0]["iata"]
+
+    origin_iata = resolve_code(origin)
+    dest_iata = resolve_code(destination)
+
+    logger.info(f"📞 Agent booking for ticket {ticket_id}: {origin}→{origin_iata} → {destination}→{dest_iata} on {departure_date}")
 
     # 1. Verify ticket
     ticket = get_cs_ticket(ticket_id)
@@ -203,8 +219,8 @@ async def agent_book_for_user(
     # 2. Search flights via Duffel
     try:
         raw = await duffel.search_flights(
-            origin=origin,
-            destination=destination,
+            origin=origin_iata,
+            destination=dest_iata,
             departure_date=departure_date,
             passengers=passengers,
             cabin_class=seat_class,
@@ -240,12 +256,12 @@ async def agent_book_for_user(
 
     summary = (
         f"{cheapest.get('airline', '')} {cheapest.get('flight_number', '')} - "
-        f"{origin} → {destination}, {cheapest.get('price', '')} {cheapest.get('currency', '')}"
+        f"{origin_iata} → {dest_iata}, {cheapest.get('price', '')} {cheapest.get('currency', '')}"
     )
 
     update_session(session_id,
-        origin=origin,
-        destination=destination,
+        origin=origin_iata,
+        destination=dest_iata,
         departure_date=departure_date,
         passenger_name=passenger_name,
         passenger_assistance="none",
@@ -282,8 +298,8 @@ async def agent_book_for_user(
             "session_id": session_id,
             "duffel_order_id": f"mock_{uuid.uuid4().hex[:8]}",
             "status": "confirmed",
-            "origin": origin,
-            "destination": destination,
+            "origin": origin_iata,
+            "destination": dest_iata,
             "departure_date": departure_date,
             "flight_summary": summary,
             "passenger_name": passenger_name,
@@ -300,8 +316,8 @@ async def agent_book_for_user(
     # 7. Send BOOKING: structured message for TTS
     booking_data = json.dumps({
         "type": "booking_confirmed",
-        "origin": origin,
-        "destination": destination,
+        "origin": origin_iata,
+        "destination": dest_iata,
         "date": departure_date,
         "passenger_name": passenger_name,
         "total_amount": f"{total_amount} {total_currency}",
@@ -316,7 +332,7 @@ async def agent_book_for_user(
     # Also send a human-readable summary
     summary_msg = (
         f"✅ Agent booked for {passenger_name}: "
-        f"{origin} → {destination} on {departure_date}, "
+        f"{origin_iata} → {dest_iata} on {departure_date}, "
         f"{cheapest.get('airline', '')} "
         f"{cheapest.get('flight_number', '')} "
         f"{total_amount} {total_currency} "
@@ -324,13 +340,13 @@ async def agent_book_for_user(
     )
     add_cs_message(ticket_id, "system", summary_msg)
 
-    logger.info(f"✅ Agent booking complete for {passenger_name}: {origin}→{destination} Ref: {booking_ref}")
+    logger.info(f"✅ Agent booking complete for {passenger_name}: {origin_iata}→{dest_iata} Ref: {booking_ref}")
 
     return {
         "status": "booked",
         "booking_reference": booking_ref,
-        "origin": origin,
-        "destination": destination,
+        "origin": origin_iata,
+        "destination": dest_iata,
         "departure_date": departure_date,
         "passenger_name": passenger_name,
         "total_amount": f"{total_amount} {total_currency}",
