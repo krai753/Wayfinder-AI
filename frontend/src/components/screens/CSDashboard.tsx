@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { MessageSquare, Phone, X, Send, Clock, CheckCircle, AlertCircle, User, HeadphonesIcon } from "lucide-react";
+import { MessageSquare, Phone, X, Send, Clock, CheckCircle, AlertCircle, User, HeadphonesIcon, Plane, DollarSign, Calendar, Users, ChevronDown } from "lucide-react";
 
 const BASE = import.meta.env.VITE_API_BASE?.replace(/\/$/, "") || "https://139.180.203.171:8000/api";
 
@@ -13,6 +13,7 @@ interface Ticket {
   created_at: string;
   message_count: number;
   last_message: string;
+  call_status?: string;
 }
 
 interface Message {
@@ -23,6 +24,8 @@ interface Message {
   created_at: string;
 }
 
+type ActiveTab = "chat" | "booking";
+
 export default function CSDashboard() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
@@ -31,7 +34,19 @@ export default function CSDashboard() {
   const [notifications, setNotifications] = useState(0);
   const [agentName, setAgentName] = useState("Agent Smith");
   const [editingName, setEditingName] = useState(false);
+  const [activeTab, setActiveTab] = useState<ActiveTab>("chat");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Booking form state
+  const [bkName, setBkName] = useState("");
+  const [bkOrigin, setBkOrigin] = useState("");
+  const [bkDest, setBkDest] = useState("");
+  const [bkDate, setBkDate] = useState("");
+  const [bkPassengers, setBkPassengers] = useState("1");
+  const [bkSeat, setBkSeat] = useState("economy");
+  const [bkBudget, setBkBudget] = useState("");
+  const [bkResult, setBkResult] = useState<{ msg: string; type: string } | null>(null);
+  const [bkLoading, setBkLoading] = useState(false);
 
   // Poll for tickets
   useEffect(() => {
@@ -79,7 +94,10 @@ export default function CSDashboard() {
   const openTicket = useCallback(async (ticket: Ticket) => {
     setActiveTicket(ticket);
     setNotifications(0);
-    // Auto-assign if unassigned
+    // Pre-fill name from ticket
+    if (ticket.user_name && ticket.user_name !== "Guest") {
+      setBkName(ticket.user_name);
+    }
     if (ticket.status === "open") {
       try {
         await fetch(`${BASE}/cs/tickets/${ticket.id}/assign?agent_id=${encodeURIComponent(agentName)}`, { method: "POST" });
@@ -111,6 +129,48 @@ export default function CSDashboard() {
       setActiveTicket(null);
     } catch {}
   }, [activeTicket]);
+
+  // ── Agent Booking ──────────────────────────────────────────────
+
+  const agentBookFlight = useCallback(async () => {
+    if (!activeTicket) {
+      setBkResult({ msg: "Select a ticket first", type: "error" });
+      return;
+    }
+    if (!bkName.trim()) { setBkResult({ msg: "Enter passenger name", type: "error" }); return; }
+    if (!bkOrigin.trim() || bkOrigin.trim().length !== 3) { setBkResult({ msg: "Enter 3-letter origin IATA (e.g. LHR)", type: "error" }); return; }
+    if (!bkDest.trim() || bkDest.trim().length !== 3) { setBkResult({ msg: "Enter 3-letter destination IATA (e.g. NRT)", type: "error" }); return; }
+    if (!bkDate) { setBkResult({ msg: "Select a departure date", type: "error" }); return; }
+
+    setBkLoading(true);
+    setBkResult({ msg: "Searching flights...", type: "loading" });
+
+    try {
+      const params = new URLSearchParams({
+        ticket_id: activeTicket.id,
+        origin: bkOrigin.trim().toUpperCase(),
+        destination: bkDest.trim().toUpperCase(),
+        departure_date: bkDate,
+        passenger_name: bkName.trim(),
+        passengers: bkPassengers,
+        seat_class: bkSeat,
+      });
+      if (bkBudget) params.set("max_price", bkBudget);
+
+      const res = await fetch(`${BASE}/cs/book-for-user?${params}`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Booking failed");
+
+      setBkResult({
+        msg: `✅ Booked! ${data.origin} → ${data.destination} on ${data.departure_date} for ${data.passenger_name}. ${data.airline} ${data.flight_number} ${data.total_amount}. Ref: ${data.booking_reference}`,
+        type: "success",
+      });
+    } catch (e: any) {
+      setBkResult({ msg: `❌ ${e.message}`, type: "error" });
+    } finally {
+      setBkLoading(false);
+    }
+  }, [activeTicket, bkName, bkOrigin, bkDest, bkDate, bkPassengers, bkSeat, bkBudget]);
 
   const statusColor = (status: string) => {
     switch (status) {
@@ -144,7 +204,6 @@ export default function CSDashboard() {
     <div className="min-h-screen flex" style={{ background: "#0B1020" }}>
       {/* ── SIDEBAR ──────────────────────────────────────────── */}
       <div className="w-80 flex flex-col border-r shrink-0" style={{ borderColor: "rgba(255,255,255,0.06)", background: "rgba(13,18,33,0.8)" }}>
-        {/* Header */}
         <div className="px-5 pt-14 pb-4 border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
           <div className="flex items-center gap-3 mb-3">
             <HeadphonesIcon size={22} color="#4F46E5" />
@@ -176,7 +235,6 @@ export default function CSDashboard() {
           <p className="text-[10px] text-[#64748B] mt-2">{openTickets.length} open tickets</p>
         </div>
 
-        {/* Ticket List */}
         <div className="flex-1 overflow-y-auto">
           {tickets.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full px-5 text-center">
@@ -195,23 +253,13 @@ export default function CSDashboard() {
                 style={{ borderColor: "rgba(255,255,255,0.04)" }}
               >
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-semibold text-white truncate flex-1">
-                    {ticket.user_name}
-                  </span>
-                  <span
-                    className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider"
-                    style={{
-                      background: `${statusColor(ticket.status)}15`,
-                      color: statusColor(ticket.status),
-                      border: `1px solid ${statusColor(ticket.status)}25`,
-                    }}
-                  >
-                    {statusLabel(ticket.status)}
+                  <span className="text-sm font-semibold text-white truncate flex-1">{ticket.user_name}</span>
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider"
+                    style={{ background: `${statusColor(ticket.status)}15`, color: statusColor(ticket.status), border: `1px solid ${statusColor(ticket.status)}25` }}>
+                    {ticket.call_status === "in_call" ? "📞 Call" : statusLabel(ticket.status)}
                   </span>
                 </div>
-                <p className="text-[11px] text-[#64748B] truncate">
-                  {ticket.last_message || ticket.issue || "No messages yet"}
-                </p>
+                <p className="text-[11px] text-[#64748B] truncate">{ticket.last_message || ticket.issue || "No messages yet"}</p>
                 <p className="text-[9px] text-[#475569] mt-1">{timeAgo(ticket.created_at)}</p>
               </button>
             ))
@@ -219,12 +267,12 @@ export default function CSDashboard() {
         </div>
       </div>
 
-      {/* ── CHAT AREA ────────────────────────────────────────── */}
+      {/* ── MAIN AREA ────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col">
         {activeTicket ? (
           <>
-            {/* Chat Header */}
-            <div className="px-6 py-4 border-b flex items-center gap-3" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+            {/* Header + Tabs */}
+            <div className="px-6 py-3 border-b flex items-center gap-3" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
               <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "rgba(79,70,229,0.15)" }}>
                 <User size={16} color="#4F46E5" />
               </div>
@@ -232,91 +280,180 @@ export default function CSDashboard() {
                 <p className="text-sm font-semibold text-white">{activeTicket.user_name}</p>
                 <p className="text-[10px] text-[#64748B]">Ticket: {activeTicket.id}</p>
               </div>
-              <div className="flex items-center gap-2">
-                <span
-                  className="px-2 py-1 rounded text-[10px] font-bold"
-                  style={{
-                    background: `${statusColor(activeTicket.status)}15`,
-                    color: statusColor(activeTicket.status),
-                    border: `1px solid ${statusColor(activeTicket.status)}25`,
-                  }}
-                >
-                  {statusLabel(activeTicket.status)}
-                </span>
-                <button
-                  onClick={closeTicket}
-                  className="px-3 py-1.5 rounded-lg text-[10px] font-semibold transition-colors"
-                  style={{ background: "rgba(34,197,94,0.1)", color: "#22C55E", border: "1px solid rgba(34,197,94,0.2)" }}
-                >
-                  <CheckCircle size={14} className="inline mr-1" /> Resolve
-                </button>
-                <button
-                  onClick={() => setActiveTicket(null)}
-                  className="p-1.5 rounded-lg hover:bg-white/[0.06] transition-colors"
-                >
-                  <X size={16} color="#64748B" />
-                </button>
-              </div>
+              <button onClick={() => closeTicket()} className="px-3 py-1.5 rounded-lg text-[10px] font-semibold transition-colors"
+                style={{ background: "rgba(34,197,94,0.1)", color: "#22C55E", border: "1px solid rgba(34,197,94,0.2)" }}>
+                <CheckCircle size={14} className="inline mr-1" /> Resolve
+              </button>
+              <button onClick={() => setActiveTicket(null)} className="p-1.5 rounded-lg hover:bg-white/[0.06] transition-colors">
+                <X size={16} color="#64748B" />
+              </button>
             </div>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-              {messages.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-full text-center">
-                  <MessageSquare size={36} color="#64748B" className="mb-2 opacity-30" />
-                  <p className="text-sm text-[#64748B]">No messages yet</p>
-                  <p className="text-[10px] text-[#475569] mt-1">Send a message to start the conversation</p>
+            {/* Tab bar */}
+            <div className="flex border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+              <button onClick={() => setActiveTab("chat")}
+                className="px-5 py-2.5 text-xs font-semibold transition-colors"
+                style={{ color: activeTab === "chat" ? "#4F46E5" : "#64748B", borderBottom: activeTab === "chat" ? "2px solid #4F46E5" : "2px solid transparent" }}>
+                💬 Chat
+              </button>
+              <button onClick={() => setActiveTab("booking")}
+                className="px-5 py-2.5 text-xs font-semibold transition-colors"
+                style={{ color: activeTab === "booking" ? "#4F46E5" : "#64748B", borderBottom: activeTab === "booking" ? "2px solid #4F46E5" : "2px solid transparent" }}>
+                ✈️ Book Flight
+              </button>
+            </div>
+
+            {/* ── CHAT TAB ──────────────────────────────────── */}
+            {activeTab === "chat" && (
+              <>
+                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+                  {messages.length === 0 && (
+                    <div className="flex flex-col items-center justify-center h-full text-center">
+                      <MessageSquare size={36} color="#64748B" className="mb-2 opacity-30" />
+                      <p className="text-sm text-[#64748B]">No messages yet</p>
+                      <p className="text-[10px] text-[#475569] mt-1">Send a message to start the conversation</p>
+                    </div>
+                  )}
+                  {messages.map((msg) => (
+                    <div key={msg.id} className={`flex ${msg.sender === "agent" ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl ${msg.sender === "agent" ? "rounded-tr-md" : "rounded-tl-md"}`}
+                        style={msg.sender === "agent"
+                          ? { background: "linear-gradient(135deg,#4F46E5,#6366f1)" }
+                          : msg.sender === "system"
+                          ? { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }
+                          : { background: "rgba(255,255,255,0.08)" }}>
+                        <p className={`text-sm ${msg.sender === "system" ? "text-[#64748B] italic" : "text-white"}`}>
+                          {msg.message.startsWith("BOOKING:") ? "📋 📞 Booking confirmation sent to user (read aloud via TTS)" : msg.message}
+                        </p>
+                        <p className={`text-[9px] mt-1 ${msg.sender === "agent" ? "text-white/50" : "text-[#475569]"}`}>
+                          {msg.sender === "agent" ? agentName : msg.sender === "system" ? "System" : activeTicket?.user_name || "User"}
+                          {" · "}{timeAgo(msg.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  <div ref={messagesEndRef} />
                 </div>
-              )}
-              {messages.map((msg) => (
-                <div key={msg.id} className={`flex ${msg.sender === "agent" ? "justify-end" : "justify-start"}`}>
-                  <div
-                    className={`max-w-[70%] px-4 py-2.5 rounded-2xl ${
-                      msg.sender === "agent"
-                        ? "rounded-tr-md"
-                        : "rounded-tl-md"
-                    }`}
-                    style={
-                      msg.sender === "agent"
-                        ? { background: "linear-gradient(135deg,#4F46E5,#6366f1)" }
-                        : msg.sender === "system"
-                        ? { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }
-                        : { background: "rgba(255,255,255,0.08)" }
-                    }
-                  >
-                    <p className={`text-sm ${msg.sender === "system" ? "text-[#64748B] italic" : "text-white"}`}>
-                      {msg.message}
-                    </p>
-                    <p className={`text-[9px] mt-1 ${msg.sender === "agent" ? "text-white/50" : "text-[#475569]"}`}>
-                      {msg.sender === "agent" ? agentName : msg.sender === "system" ? "System" : activeTicket?.user_name || "User"}
-                      {" · "}{timeAgo(msg.created_at)}
-                    </p>
+
+                <div className="px-6 py-4 border-t" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+                  <div className="flex items-center gap-3 rounded-2xl px-4 py-3" style={{ background: "rgba(21,28,47,0.8)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                    <input value={messageInput} onChange={(e) => setMessageInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                      placeholder="Type your response..." className="flex-1 bg-transparent text-sm text-white placeholder-[#64748B] focus:outline-none" />
+                    <button onClick={sendMessage} disabled={!messageInput.trim()}
+                      className="w-10 h-10 rounded-xl flex items-center justify-center disabled:opacity-30 active:scale-90 transition-transform"
+                      style={{ background: messageInput.trim() ? "linear-gradient(135deg,#4F46E5,#6366f1)" : "transparent" }}>
+                      <Send size={16} color="#fff" />
+                    </button>
                   </div>
                 </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
+              </>
+            )}
 
-            {/* Message Input */}
-            <div className="px-6 py-4 border-t" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
-              <div className="flex items-center gap-3 rounded-2xl px-4 py-3" style={{ background: "rgba(21,28,47,0.8)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                <input
-                  value={messageInput}
-                  onChange={(e) => setMessageInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                  placeholder="Type your response..."
-                  className="flex-1 bg-transparent text-sm text-white placeholder-[#64748B] focus:outline-none"
-                />
-                <button
-                  onClick={sendMessage}
-                  disabled={!messageInput.trim()}
-                  className="w-10 h-10 rounded-xl flex items-center justify-center disabled:opacity-30 active:scale-90 transition-transform"
-                  style={{ background: messageInput.trim() ? "linear-gradient(135deg,#4F46E5,#6366f1)" : "transparent" }}
-                >
-                  <Send size={16} color="#fff" />
-                </button>
+            {/* ── BOOK FLIGHT TAB ─────────────────────────────── */}
+            {activeTab === "booking" && (
+              <div className="flex-1 overflow-y-auto p-6">
+                <div className="max-w-lg mx-auto space-y-4">
+                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Plane size={16} color="#4F46E5" /> Book Flight for {activeTicket.user_name}
+                  </h2>
+
+                  {/* Passenger Name */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-[#64748B] uppercase tracking-wider mb-1">Passenger Name</label>
+                    <input value={bkName} onChange={(e) => setBkName(e.target.value)}
+                      placeholder="e.g. John Smith"
+                      className="w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-[#475569] focus:outline-none"
+                      style={{ background: "rgba(21,28,47,0.8)", border: "1px solid rgba(255,255,255,0.08)" }} />
+                  </div>
+
+                  {/* Origin + Destination */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-[#64748B] uppercase tracking-wider mb-1">Origin</label>
+                      <input value={bkOrigin} onChange={(e) => setBkOrigin(e.target.value.toUpperCase())}
+                        placeholder="LHR" maxLength={3}
+                        className="w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-[#475569] focus:outline-none uppercase"
+                        style={{ background: "rgba(21,28,47,0.8)", border: "1px solid rgba(255,255,255,0.08)" }} />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-[#64748B] uppercase tracking-wider mb-1">Destination</label>
+                      <input value={bkDest} onChange={(e) => setBkDest(e.target.value.toUpperCase())}
+                        placeholder="NRT" maxLength={3}
+                        className="w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-[#475569] focus:outline-none uppercase"
+                        style={{ background: "rgba(21,28,47,0.8)", border: "1px solid rgba(255,255,255,0.08)" }} />
+                    </div>
+                  </div>
+
+                  {/* Date */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-[#64748B] uppercase tracking-wider mb-1">
+                      <Calendar size={12} className="inline mr-1" /> Departure Date
+                    </label>
+                    <input type="date" value={bkDate} onChange={(e) => setBkDate(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl text-sm text-white focus:outline-none"
+                      style={{ background: "rgba(21,28,47,0.8)", border: "1px solid rgba(255,255,255,0.08)", colorScheme: "dark" }} />
+                  </div>
+
+                  {/* Passengers + Seat */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-[#64748B] uppercase tracking-wider mb-1">
+                        <Users size={12} className="inline mr-1" /> Passengers
+                      </label>
+                      <select value={bkPassengers} onChange={(e) => setBkPassengers(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl text-sm text-white focus:outline-none"
+                        style={{ background: "rgba(21,28,47,0.8)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                        {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} Adult{n > 1 ? "s" : ""}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-[#64748B] uppercase tracking-wider mb-1">
+                        <ChevronDown size={12} className="inline mr-1" /> Seat Class
+                      </label>
+                      <select value={bkSeat} onChange={(e) => setBkSeat(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl text-sm text-white focus:outline-none"
+                        style={{ background: "rgba(21,28,47,0.8)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                        <option value="economy">Economy</option>
+                        <option value="premium_economy">Premium Economy</option>
+                        <option value="business">Business</option>
+                        <option value="first">First Class</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Budget */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-[#64748B] uppercase tracking-wider mb-1">
+                      <DollarSign size={12} className="inline mr-1" /> Max Budget (optional)
+                    </label>
+                    <input type="number" value={bkBudget} onChange={(e) => setBkBudget(e.target.value)}
+                      placeholder="e.g. 500" min="0"
+                      className="w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-[#475569] focus:outline-none"
+                      style={{ background: "rgba(21,28,47,0.8)", border: "1px solid rgba(255,255,255,0.08)" }} />
+                  </div>
+
+                  {/* Submit */}
+                  <button onClick={agentBookFlight} disabled={bkLoading}
+                    className="w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40 active:scale-[0.98]"
+                    style={{ background: bkLoading ? "#2D3B55" : "linear-gradient(135deg,#4F46E5,#6366f1)" }}>
+                    {bkLoading ? "🔍 Searching & Booking..." : "🔍 Search & Book for User"}
+                  </button>
+
+                  {/* Result */}
+                  {bkResult && (
+                    <div className="rounded-xl px-4 py-3 text-sm"
+                      style={{
+                        background: bkResult.type === "success" ? "rgba(34,197,94,0.1)" : bkResult.type === "error" ? "rgba(239,68,68,0.1)" : "rgba(79,70,229,0.1)",
+                        border: bkResult.type === "success" ? "1px solid rgba(34,197,94,0.2)" : bkResult.type === "error" ? "1px solid rgba(239,68,68,0.2)" : "1px solid rgba(79,70,229,0.2)",
+                        color: bkResult.type === "success" ? "#22C55E" : bkResult.type === "error" ? "#FCA5A5" : "#818CF8",
+                      }}>
+                      {bkResult.msg}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </>
         ) : (
           /* Empty State */
@@ -331,7 +468,7 @@ export default function CSDashboard() {
             <div className="flex items-center gap-4 text-[10px] text-[#475569]">
               <span className="flex items-center gap-1"><Clock size={12} /> Auto-refresh</span>
               <span className="flex items-center gap-1"><MessageSquare size={12} /> Live chat</span>
-              <span className="flex items-center gap-1"><AlertCircle size={12} /> Notifications</span>
+              <span className="flex items-center gap-1"><Plane size={12} /> Book flights</span>
             </div>
           </div>
         )}

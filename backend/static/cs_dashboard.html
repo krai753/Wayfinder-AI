@@ -451,46 +451,37 @@ async function agentBookFlight() {
   const origin = document.getElementById('bkOrigin').value.trim().toUpperCase();
   const dest = document.getElementById('bkDest').value.trim().toUpperCase();
   const date = document.getElementById('bkDate').value;
-  const passengers = parseInt(document.getElementById('bkPassengers').value);
+  const passengers = document.getElementById('bkPassengers').value;
+  const seat = document.getElementById('bkSeat').value;
   const budget = document.getElementById('bkBudget').value;
   if (!name) return showBookingResult('Enter passenger name', 'error');
   if (!origin || origin.length !== 3) return showBookingResult('Enter 3-letter origin IATA (e.g. LHR)', 'error');
   if (!dest || dest.length !== 3) return showBookingResult('Enter 3-letter destination IATA (e.g. NRT)', 'error');
   if (!date) return showBookingResult('Select a departure date', 'error');
+  if (!activeTicketId) return showBookingResult('Select a ticket first', 'error');
 
   const btn = document.getElementById('bkSubmit');
-  btn.disabled = true; btn.textContent = '🔍 Searching...';
+  btn.disabled = true; btn.textContent = '🔍 Searching & Booking...';
   showBookingResult('Searching flights...', 'loading');
   try {
-    let searchUrl = `${API}/flights/search`;
-    let res = await fetch(searchUrl, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({origin, destination, departure_date: date, passengers}) });
-    if (budget) res = await fetch(`${API}/flights/budget?origin=${origin}&destination=${dest}&departure_date=${date}&max_price=${budget}&passengers=${passengers}`);
+    const params = new URLSearchParams({
+      ticket_id: activeTicketId, origin, destination, departure_date: date,
+      passenger_name: name, passengers, seat_class: seat,
+    });
+    if (budget) params.set('max_price', budget);
+    const res = await fetch(`${API}/cs/book-for-user?${params}`, { method: 'POST' });
     const data = await res.json();
-    let offers = data.offers || data;
-    if (!Array.isArray(offers)) offers = [];
-    if (offers.length === 0) {
-      showBookingResult('No flights found. Try different dates or routes.', 'error');
-      btn.disabled = false; btn.textContent = '🔍 Search & Book for User'; return;
-    }
-    const cheapest = offers.reduce((a,b) => (parseFloat(a.price||a.total_amount||0) < parseFloat(b.price||b.total_amount||0)) ? a : b, offers[0]);
-    showBookingResult(`Found ${offers.length} flights! Cheapest: ${cheapest.airline||'Airline'} £${cheapest.price||cheapest.total_amount||'N/A'} · ${origin} → ${dest} on ${date}`, 'loading');
-    btn.textContent = '✈️ Booking...';
-    const sessionRes = await fetch(`${API}/wizard/session`, { method: 'POST' });
-    const sessionData = await sessionRes.json();
-    const sessionId = sessionData.id || sessionData.session_id;
-    const bookRes = await fetch(`${API}/booking/create`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({session_id: sessionId, origin, destination, departure_date: date, passenger_name: name, total_amount: cheapest.price||cheapest.total_amount||'0', booking_reference: `CS-${Date.now().toString(36).toUpperCase()}`}) });
-    const booking = await bookRes.json();
-    const bookingRef = booking.booking_reference || booking.id || `CS-${Date.now().toString(36).toUpperCase()}`;
-    const totalPrice = cheapest.price || cheapest.total_amount || '0';
-    // Send structured booking confirmation message
-    const bookingData = JSON.stringify({type:'booking_confirmed',origin,destination,date,passenger_name:name,total_amount:totalPrice,booking_reference:bookingRef,airline:cheapest.airline||'Airline',flight_number:cheapest.flight_number||'',seat:document.getElementById('bkSeat').value,passengers});
-    await fetch(`${API}/cs/tickets/${activeTicketId}/message?sender=system&message=${encodeURIComponent('BOOKING:'+bookingData)}`, { method: 'POST' });
-    const summary = `✈️ **Agent booked for ${name}**: ${origin} → ${dest} on ${date}, ${cheapest.airline||''} £${totalPrice}`;
-    await fetch(`${API}/cs/tickets/${activeTicketId}/message?sender=system&message=${encodeURIComponent(summary)}`, { method: 'POST' });
-    showBookingResult(`✅ BOOKED! ${origin} → ${dest} on ${date}. ${name}. Ref: ${bookingRef}`, 'success');
+    if (!res.ok) throw new Error(data.detail || 'Booking failed');
+    const summary = `✅ Booked! ${data.origin} → ${data.destination} on ${data.departure_date} for ${data.passenger_name}. ${data.airline} ${data.flight_number} ${data.total_amount}. Ref: ${data.booking_reference}`;
+    showBookingResult(summary, 'success');
     btn.textContent = '✅ Booked! Book Another';
     lastMsgCount = 0; fetchMessages();
-  } catch(e) { showBookingResult(`Failed: ${e.message}`, 'error'); btn.disabled = false; btn.textContent = '🔍 Search & Book for User'; }
+    // Auto-fill name for next booking
+    document.getElementById('bkName').value = name;
+  } catch(e) {
+    showBookingResult(`❌ ${e.message}`, 'error');
+    btn.disabled = false; btn.textContent = '🔍 Search & Book for User';
+  }
 }
 
 function showBookingResult(msg, type) {
