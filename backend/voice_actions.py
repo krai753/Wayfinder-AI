@@ -17,7 +17,7 @@ from airport_data import get_airport
 from database import (
     get_session, get_bookings, get_bookings_by_user, get_portfolio_stats,
     get_offers as get_cached_offers, save_offer, save_booking,
-    update_session as update_db_session, create_cs_ticket,
+    update_session as update_db_session, create_cs_ticket, create_session,
 )
 from wizard_manager import create_wizard_session, get_wizard_session, process_step
 
@@ -214,6 +214,8 @@ async def handle_search_flights(params: dict, response_text: str, session_id: st
     if not sid:
         session_data = create_wizard_session()
         sid = session_data["id"]
+    elif not get_wizard_session(sid):
+        create_session(sid)
 
     reset_retry(sid)
 
