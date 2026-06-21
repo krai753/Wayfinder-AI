@@ -11,6 +11,7 @@ from database import (
     update_cs_ticket, add_cs_message, get_cs_messages,
     get_session, create_session, update_session,
     save_booking, save_offer,
+    get_cs_ticket_by_session, get_user_agent_messages,
 )
 from config import settings
 from duffel_client import duffel
@@ -85,6 +86,33 @@ async def close_ticket(ticket_id: str):
     update_cs_ticket(ticket_id, status="closed")
     add_cs_message(ticket_id, "system", "Ticket closed")
     return {"status": "closed", "ticket_id": ticket_id}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# USER-FACING — Voice app checks agent messages
+# ═══════════════════════════════════════════════════════════════════
+
+
+@router.get("/my-ticket")
+async def get_my_ticket(session_id: str = Query(..., description="Session ID from voice app")):
+    """
+    User-facing endpoint: returns ticket status + agent messages for TTS reading.
+    Used by the voice app so blind users can hear agent responses via text-to-speech.
+    """
+    ticket = get_cs_ticket_by_session(session_id)
+    if not ticket:
+        return {"ticket": None, "agent_messages": [], "status": "no_ticket"}
+    msgs = get_user_agent_messages(ticket["id"])
+    return {
+        "ticket": {
+            "id": ticket["id"],
+            "status": ticket["status"],
+            "agent_id": ticket.get("agent_id", ""),
+            "created_at": ticket.get("created_at", ""),
+        },
+        "agent_messages": msgs,
+        "status": "active" if ticket["status"] != "closed" else "closed",
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════

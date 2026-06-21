@@ -24,7 +24,7 @@ from voice_actions import (
     save_extracted_fields, get_missing_booking_fields, needs_cs_escalation,
 )
 from airport_data import search_airports, get_airport
-from database import create_cs_ticket, update_session as update_db_session
+from database import create_cs_ticket, get_cs_ticket_by_session, get_user_agent_messages, update_session as update_db_session
 from wizard_manager import create_wizard_session, get_wizard_session, process_step
 
 router = APIRouter(prefix="/api/voice", tags=["voice"])
@@ -157,13 +157,23 @@ async def voice_command(req: VoiceCommandRequest):
 
     if not in_collection_mode and low_conf_count >= 3:
         logger.warning("3 consecutive low-confidence cycles — escalating to CS")
+        sid = req.session_id or ""
+        ticket_id = f"TKT{uuid.uuid4().hex[:8].upper()}"
+        user_name = "Guest"
+        session_data = get_wizard_session(sid) if sid else None
+        if session_data and session_data.get("passenger_name"):
+            user_name = session_data["passenger_name"]
+        create_cs_ticket(ticket_id, session_id=sid, user_name=user_name, issue="AI low confidence — 3 consecutive cycles")
         return VoiceCommandResponse(
             intent="cs_escalation",
-            parameters={"confidence": confidence, "low_confidence_count": low_conf_count, "original_text": req.text},
+            parameters={"confidence": confidence, "low_confidence_count": low_conf_count,
+                         "original_text": req.text, "ticket_id": ticket_id,
+                         "last_agent_message_id": 0},
             response_text=(
                 "I'm having trouble understanding you clearly. "
-                "Let me connect you to a customer service agent who can assist you directly. "
-                "Please hold the line."
+                f"Your ticket ID is {ticket_id}. "
+                "Let me connect you to a customer service agent. "
+                "You can check for agent messages by saying 'check my messages'."
             ),
         )
 
@@ -259,9 +269,16 @@ async def voice_command(req: VoiceCommandRequest):
             create_cs_ticket(ticket_id, session_id=sid, user_name=user_name, issue="User requested human agent")
             return VoiceCommandResponse(
                 intent="cs_escalation",
-                parameters={"reason": "user_requested", "ticket_id": ticket_id, "session_id": sid},
-                response_text="Let me connect you to a customer service agent right away. Please hold the line.",
+                parameters={"reason": "user_requested", "ticket_id": ticket_id, "session_id": sid,
+                             "last_agent_message_id": 0},
+                response_text=(
+                    "Let me connect you to a customer service agent right away. "
+                    "Your ticket ID is " + ticket_id + ". "
+                    "You can check for agent messages anytime by saying 'check my messages'."
+                ),
             )
+        elif intent == "check_cs_messages":
+            return await handle_check_cs_messages(params, req.session_id)
         else:
             return VoiceCommandResponse(
                 intent="help", parameters={"unknown_intent": intent},
@@ -324,6 +341,49 @@ async def cs_escalate(session_id: str = "", issue: str = ""):
 
 # ── SPEECH-TO-TEXT ────────────────────────────────────────────────
 
+
+
+async def handle_check_cs_messages(params: dict, session_id: str | None) -> VoiceCommandResponse:
+    """Check if the CS agent has sent any messages for the user."""
+    sid = session_id or params.get("session_id", "")
+    last_msg_id = int(params.get("last_agent_message_id", 0))
+
+    if not sid:
+        return VoiceCommandResponse(
+            intent="check_cs_messages", parameters=params,
+            response_text="I need your session ID to check for messages.",
+        )
+
+    ticket = get_cs_ticket_by_session(sid)
+    if not ticket:
+        return VoiceCommandResponse(
+            intent="check_cs_messages", parameters=params,
+            response_text="You don't have an active support ticket. Say 'talk to an agent' to create one.",
+        )
+
+    msgs = get_user_agent_messages(ticket["id"], since_id=last_msg_id)
+    if not msgs:
+        return VoiceCommandResponse(
+            intent="check_cs_messages",
+            parameters={"last_agent_message_id": last_msg_id},
+            response_text="No new messages from the agent yet. I'll keep checking for you.",
+        )
+
+    latest_id = max(m["id"] for m in msgs)
+    agent_responses = [m["message"] for m in msgs if m["message"]]
+    if agent_responses:
+        speech = "You have messages from the agent. " + " ".join(agent_responses)
+    else:
+        speech = "You have new messages from customer support."
+
+    return VoiceCommandResponse(
+        intent="check_cs_messages",
+        parameters={"last_agent_message_id": latest_id, "ticket_status": ticket["status"], "ticket_id": ticket["id"]},
+        response_text=speech,
+    )
+
+
+# --- SPEECH-TO-TEXT ---
 
 @router.post("/listen")
 async def voice_listen(audio: UploadFile = File(...)):

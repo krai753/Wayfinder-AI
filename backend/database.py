@@ -436,3 +436,25 @@ def get_cs_messages(ticket_id: str) -> list[dict]:
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def get_cs_ticket_by_session(session_id: str) -> dict | None:
+    """Find the most recent open ticket for a session."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM cs_tickets WHERE session_id = ? AND status != 'closed' ORDER BY created_at DESC LIMIT 1",
+        (session_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_user_agent_messages(ticket_id: str, since_id: int = 0) -> list[dict]:
+    """Get agent messages for TTS reading (excludes system)."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM cs_messages WHERE ticket_id = ? AND id > ? AND sender = 'agent' ORDER BY created_at ASC",
+        (ticket_id, since_id),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
