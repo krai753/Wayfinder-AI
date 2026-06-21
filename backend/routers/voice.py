@@ -218,6 +218,24 @@ async def voice_command(req: VoiceCommandRequest):
     params = result.get("parameters", {})
     response_text = result.get("response_text", "")
 
+    # ── MANUAL PASSENGER COUNT DETECTION ───────────────────
+    # If we're in a booking flow and user says a number, extract passengers
+    if req.session_id and result.get("intent") in ("unknown", "help", "search_flights", "confirm_booking"):
+        from llm_orchestrator import _extract_passengers
+        extracted = _extract_passengers(req.text)
+        if extracted and extracted > 0:
+            existing_session = get_wizard_session(req.session_id) if req.session_id else None
+            existing_passengers = int(existing_session.get("passengers", 0)) if existing_session else 0
+            if not existing_passengers:
+                process_step(req.session_id, "passengers", {"passengers": extracted})
+                logger.info(f"Extracted passengers={extracted} from '{req.text}'")
+                # Continue to confirmation
+                params["passengers"] = extracted
+                # If we were in help/unknown mode but have a number, route to confirm
+                if result.get("intent") in ("unknown", "help"):
+                    result["intent"] = "confirm_booking"
+    # ── END PASSENGER DETECTION ────────────────────────────
+
     # ── CONFIDENCE GATE — track across 3 consecutive cycles ────
     confidence = float(params.get("confidence", 1.0))
     in_collection_mode = False
@@ -1048,6 +1066,20 @@ async def _handle_provide_name(params: dict, response_text: str, session_id: str
         # Save passenger name in wizard (this advances to assistance step)
         process_step(sid, "passenger", {"name": name})
 
+        # Check if passengers count is already set
+        session_data = get_db_session(sid)
+        passengers = int(session_data.get("passengers", 0)) if session_data else 0
+        if not passengers:
+            # Ask how many passengers before proceeding
+            speech = (
+                f"Thanks, {name}! How many passengers will be traveling?"
+            )
+            return VoiceCommandResponse(
+                intent="collect_booking_info",
+                parameters={"missing_fields": ["passengers"], "next_field": "passengers", "session_id": sid, "user_lang": user_lang},
+                response_text=_translate_response(speech, user_lang),
+            )
+
         # Auto-accept "no assistance" and move to confirmation
         process_step(sid, "assistance", {"assistance": "none"})
 
@@ -1076,6 +1108,7 @@ async def _handle_provide_name(params: dict, response_text: str, session_id: str
 async def _handle_confirm_booking(params: dict, response_text: str, session_id: str | None) -> VoiceCommandResponse:
     """
     Handle user confirming the booking.
+    Auto-selects cheapest offer if none selected, asks for passenger name if missing.
     Calls create_booking to book via Duffel (or mock fallback).
     """
     user_lang = params.get("user_lang", "")
@@ -1088,13 +1121,53 @@ async def _handle_confirm_booking(params: dict, response_text: str, session_id: 
             response_text=_translate_response("I don't have an active booking session. Let's start over - say 'book a flight'.", user_lang),
         )
 
-    # Save assistance default if not set
-    from database import get_session as get_db_sesh
+    from database import get_session as get_db_sesh, get_offers as get_cached_offers
     session_data = get_db_sesh(sid)
+
+    # ── STEP 1: Ensure selected_offer_id is set ──────────────
+    if not session_data or not session_data.get("selected_offer_id"):
+        # Auto-select cheapest from cached offers
+        cached = get_cached_offers(sid)
+        if cached:
+            cheapest = min(cached, key=lambda co: float(co.get("offer_data", {}).get("price", 0) or 0))
+            od = cheapest.get("offer_data", {})
+            if isinstance(od, dict) and od.get("id"):
+                offer_id = od["id"]
+                summary = (
+                    f"{od.get('airline', '')} {od.get('flight_number', '')} - "
+                    f"{od.get('origin', '')} to {od.get('destination', '')}, "
+                    f"{od.get('price', '')} {od.get('currency', '')}"
+                )
+                process_step(sid, "flight_selection", {
+                    "offer_id": offer_id,
+                    "flight_summary": summary,
+                })
+                # Refresh session data
+                session_data = get_db_sesh(sid)
+
+    # ── STEP 2: Check passenger name ─────────────────────────
+    passenger_name = session_data.get("passenger_name", "") if session_data else ""
+    if not passenger_name:
+        # Ask for passenger name first
+        return VoiceCommandResponse(
+            intent="collect_booking_info",
+            parameters={"missing_fields": ["passenger_name"], "next_field": "passenger_name", "session_id": sid, "user_lang": user_lang},
+            response_text=_translate_response("What is the passenger's full name?", user_lang),
+        )
+
+    # ── STEP 2b: Check number of passengers ──────────────────
+    passengers = int(session_data.get("passengers", 0)) if session_data else 0
+    if not passengers:
+        return VoiceCommandResponse(
+            intent="collect_booking_info",
+            parameters={"missing_fields": ["passengers"], "next_field": "passengers", "session_id": sid, "user_lang": user_lang},
+            response_text=_translate_response("How many passengers will be traveling?", user_lang),
+        )
+
+    # ── STEP 3: Create the booking ───────────────────────────
     if session_data and not session_data.get("passenger_assistance"):
         process_step(sid, "assistance", {"assistance": "none"})
 
-    # Save confirmation in wizard
     process_step(sid, "confirmation", {"confirmed": True})
 
     # Create the booking

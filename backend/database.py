@@ -113,6 +113,18 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
+    # Add passengers column to sessions
+    try:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN passengers INTEGER DEFAULT 1")
+    except sqlite3.OperationalError:
+        pass
+
+    # Add passengers column to bookings
+    try:
+        cursor.execute("ALTER TABLE bookings ADD COLUMN passengers INTEGER DEFAULT 1")
+    except sqlite3.OperationalError:
+        pass
+
     conn.close()
 
 
@@ -158,8 +170,8 @@ def save_booking(booking: dict) -> dict:
         """INSERT INTO bookings
            (id, session_id, user_id, duffel_order_id, status, origin, destination,
             departure_date, flight_summary, passenger_name, passenger_assistance,
-            total_amount, total_currency, booking_reference)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            total_amount, total_currency, booking_reference, passengers)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             booking["id"],
             booking["session_id"],
@@ -175,6 +187,7 @@ def save_booking(booking: dict) -> dict:
             booking.get("total_amount"),
             booking.get("total_currency", "GBP"),
             booking.get("booking_reference"),
+            booking.get("passengers", 1),
         ),
     )
     conn.commit()

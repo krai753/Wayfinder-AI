@@ -93,6 +93,7 @@ async def create_booking(req: BookingCreateRequest):
             "total_amount": total_amount,
             "total_currency": total_currency,
             "booking_reference": booking_ref,
+            "passengers": session.get("passengers", 1),
         }
 
         # Persist to SQLite
@@ -134,6 +135,7 @@ async def create_booking(req: BookingCreateRequest):
             "total_amount": mock_amount,
             "total_currency": mock_currency,
             "booking_reference": f"WAY{booking_id[-6:].upper()}",
+            "passengers": session.get("passengers", 1),
         }
         save_booking(booking)
         return BookingResponse(
