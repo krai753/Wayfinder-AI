@@ -9,6 +9,8 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from config import settings
 from database import init_db
 from duffel_client import duffel
@@ -72,6 +74,16 @@ app.include_router(wizard_router.router)
 app.include_router(manage_router.router)
 app.include_router(voice_router.router)
 app.include_router(cs_router.router)
+
+
+# Serve CS Agent Dashboard
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+@app.get("/cs-dashboard")
+async def cs_dashboard():
+    """Serve the standalone CS Agent Dashboard."""
+    return FileResponse("static/cs_dashboard.html")
 
 
 @app.get("/")
