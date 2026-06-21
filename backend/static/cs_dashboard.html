@@ -465,7 +465,7 @@ async function agentBookFlight() {
   showBookingResult('Searching flights...', 'loading');
   try {
     const params = new URLSearchParams({
-      ticket_id: activeTicketId, origin, destination, departure_date: date,
+      ticket_id: activeTicketId, origin, destination: dest, departure_date: date,
       passenger_name: name, passengers, seat_class: seat,
     });
     if (budget) params.set('max_price', budget);
