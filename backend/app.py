@@ -6,7 +6,9 @@ Run with:  uvicorn app:app --reload --host 0.0.0.0 --port 8000
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -67,7 +69,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routers
+# Register API routers (must come before catch-all static mount)
 app.include_router(search_router.router)
 app.include_router(booking_router.router)
 app.include_router(wizard_router.router)
@@ -75,8 +77,7 @@ app.include_router(manage_router.router)
 app.include_router(voice_router.router)
 app.include_router(cs_router.router)
 
-
-# Serve CS Agent Dashboard
+# Serve static files (CS dashboard, simulator)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
@@ -92,6 +93,23 @@ async def voice_simulator():
     return FileResponse("static/voice-simulator.html")
 
 
+@app.get("/health")
+async def health():
+    """Health check endpoint."""
+    return {"status": "healthy"}
+
+
+# ── Mobile Frontend (React SPA) ─────────────────────────────
+# Serve the built frontend at /app/ path
+FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+
+if FRONTEND_DIST.exists():
+    app.mount("/app", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")
+    logger.info(f"📱 Frontend mounted at /app from {FRONTEND_DIST}")
+else:
+    logger.warning(f"📱 Frontend dist not found at {FRONTEND_DIST} — skipping")
+
+
 @app.get("/")
 async def root():
     """Health check and API overview."""
@@ -100,6 +118,9 @@ async def root():
         "version": "1.0.0",
         "status": "running",
         "docs": "/docs",
+        "frontend": "/app",
+        "cs_dashboard": "/cs-dashboard",
+        "simulator": "/simulator",
         "endpoints": {
             "airport_search": "GET /api/airports?q=...",
             "airport_detail": "GET /api/airports/{iata}",
@@ -125,12 +146,6 @@ async def root():
             "voice_listen": "POST /api/voice/listen (multipart audio upload)",
         },
     }
-
-
-@app.get("/health")
-async def health():
-    """Health check endpoint."""
-    return {"status": "healthy"}
 
 
 if __name__ == "__main__":
