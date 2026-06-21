@@ -344,7 +344,7 @@ async def voice_command(req: VoiceCommandRequest):
             return VoiceCommandResponse(
                 intent="help",
                 parameters=params,
-                response_text=response_text or (
+                response_text= (
                     "I can help you search for flights, book a trip, "
                     "cancel or reschedule an existing booking, or check your flight history. "
                     "Just tell me what you need!"
@@ -365,7 +365,7 @@ async def voice_command(req: VoiceCommandRequest):
             return VoiceCommandResponse(
                 intent="cs_escalation",
                 parameters={"reason": "user_requested", "ticket_id": ticket_id, "session_id": sid},
-                response_text=response_text or "Let me connect you to a customer service agent right away. Please hold the line.",
+                response_text= "Let me connect you to a customer service agent right away. Please hold the line.",
             )
 
         else:
@@ -509,7 +509,7 @@ async def _handle_search_flights(params: dict, response_text: str, session_id: s
             "session_id": sid,
             "cheapest_offer": cheapest if offers else None,
         },
-        response_text=response_text or speech,
+        response_text= speech,
     )
 
 
@@ -552,7 +552,7 @@ async def _handle_cancel_booking(params: dict, response_text: str) -> VoiceComma
                 "refund_currency": cancel_data["refund_currency"],
                 "status": cancel_data["status"],
             },
-            response_text=response_text or speech,
+            response_text= speech,
         )
 
     except HTTPException as e:
@@ -614,7 +614,7 @@ async def _handle_reschedule_booking(params: dict, response_text: str) -> VoiceC
                 "change_offers": offers,
                 "offer_count": len(offers),
             },
-            response_text=response_text or speech,
+            response_text= speech,
         )
 
     except HTTPException as e:
@@ -652,7 +652,7 @@ async def _handle_view_history(params: dict, response_text: str) -> VoiceCommand
                 "total_trips": total,
                 "bookings": bookings[:10],
             },
-            response_text=response_text or speech,
+            response_text= speech,
         )
 
     bookings = get_bookings_by_user(user_id)
@@ -675,7 +675,7 @@ async def _handle_view_history(params: dict, response_text: str) -> VoiceCommand
             "total_trips": len(bookings),
             "bookings": bookings[:10],  # Last 10
         },
-        response_text=response_text or speech,
+        response_text= speech,
     )
 
 
@@ -714,7 +714,7 @@ async def _handle_view_portfolio(params: dict, response_text: str) -> VoiceComma
                 "upcoming_trips": upcoming,
                 "cancelled_count": cancelled,
             },
-            response_text=response_text or speech,
+            response_text= speech,
         )
 
     stats = get_portfolio_stats(user_id)
@@ -736,7 +736,7 @@ async def _handle_view_portfolio(params: dict, response_text: str) -> VoiceComma
             "upcoming_trips": stats["upcoming_trips"],
             "cancelled_count": stats["cancelled_count"],
         },
-        response_text=response_text or speech,
+        response_text= speech,
     )
 
 
@@ -818,7 +818,7 @@ async def _handle_search_with_budget(params: dict, response_text: str, session_i
             "offers": budget_offers[:5],
             "session_id": sid,
         },
-        response_text=response_text or speech,
+        response_text= speech,
     )
 
 
@@ -1024,7 +1024,7 @@ async def _handle_select_flight(params: dict, response_text: str, session_id: st
             "next_step": "passenger",
             "user_lang": user_lang,
         },
-        response_text=response_text or _translate_response(speech, user_lang),
+        response_text= _translate_response(speech, user_lang),
     )
 
 
@@ -1069,7 +1069,7 @@ async def _handle_provide_name(params: dict, response_text: str, session_id: str
             "next_step": "assistance",
             "user_lang": user_lang,
         },
-        response_text=response_text or _translate_response(speech, user_lang),
+        response_text= _translate_response(speech, user_lang),
     )
 
 
@@ -1127,7 +1127,7 @@ async def _handle_confirm_booking(params: dict, response_text: str, session_id: 
                 "booking_complete": True,
                 "user_lang": user_lang,
             },
-            response_text=response_text or _translate_response(speech, user_lang),
+            response_text= _translate_response(speech, user_lang),
         )
 
     except HTTPException as e:

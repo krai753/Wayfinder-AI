@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "motion/react";
-import { Mic, MicOff, ArrowLeft, Loader2, Volume2, CheckCircle, RefreshCw } from "lucide-react";
+import { Mic, MicOff, ArrowLeft, Loader2, Volume2, CheckCircle, RefreshCw, AlertTriangle } from "lucide-react";
 import { api } from "../../services/api";
 
 // ── Voice State Machine ──────────────────────────────────────
@@ -134,6 +134,10 @@ export default function VoiceScreen({
         unlockAudio();
         setConversationLog((prev) => [...prev, `🤖 ${text}`]);
         const blob = await api.speak(text);
+        if (!blob || blob.size === 0) {
+          console.warn("TTS returned empty blob");
+          return;
+        }
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
         currentAudioRef.current = audio;
@@ -143,14 +147,16 @@ export default function VoiceScreen({
             currentAudioRef.current = null;
             resolve();
           };
-          audio.onerror = () => {
+          audio.onerror = (e) => {
+            console.warn("TTS audio error:", e);
             URL.revokeObjectURL(url);
             currentAudioRef.current = null;
             resolve();
           };
           const playPromise = audio.play();
           if (playPromise) {
-            playPromise.catch(() => {
+            playPromise.catch((err) => {
+              console.warn("TTS play failed:", err);
               URL.revokeObjectURL(url);
               currentAudioRef.current = null;
               setAudioBlocked(true);
@@ -158,7 +164,8 @@ export default function VoiceScreen({
             });
           }
         });
-      } catch {
+      } catch (e) {
+        console.warn("TTS failed:", e);
         return;
       }
     },
