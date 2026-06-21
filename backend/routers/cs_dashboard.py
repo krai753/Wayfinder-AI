@@ -346,6 +346,7 @@ async def agent_book_for_user(
         booking = {
             "id": booking_id,
             "session_id": session_id,
+            "user_id": "user_1",
             "duffel_order_id": f"mock_{uuid.uuid4().hex[:8]}",
             "status": "confirmed",
             "origin": origin_iata,

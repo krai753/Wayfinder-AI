@@ -84,6 +84,7 @@ async def create_booking(req: BookingCreateRequest):
         booking = {
             "id": booking_id,
             "session_id": req.session_id,
+            "user_id": "user_1",
             "duffel_order_id": order_id,
             "status": "confirmed",
             "origin": origin,
@@ -97,8 +98,6 @@ async def create_booking(req: BookingCreateRequest):
             "booking_reference": booking_ref,
             "passengers": session.get("passengers", 1),
         }
-
-        # Persist to SQLite
         save_booking(booking)
 
         return BookingResponse(
