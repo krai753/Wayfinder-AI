@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { MessageSquare, Phone, X, Send, Clock, CheckCircle, AlertCircle, User, HeadphonesIcon, Plane, DollarSign, Calendar, Users, ChevronDown } from "lucide-react";
 
-const BASE = import.meta.env.VITE_API_BASE?.replace(/\/$/, "") || "https://139.180.203.171:8000/api";
+const BASE = import.meta.env.VITE_API_BASE?.replace(/\/$/, "") || window.location.origin + "/api";
 
 interface Ticket {
   id: string;

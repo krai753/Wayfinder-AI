@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 import { api } from "../../services/api";
 
 const POLL_INTERVAL = 3000;
-const API = import.meta.env.VITE_API_BASE?.replace(/\/$/, "") || "https://139.180.203.171:8000/api";
+const API = import.meta.env.VITE_API_BASE?.replace(/\/$/, "") || window.location.origin + "/api";
 
 export default function CSCallHandler({ sessionId: initialSessionId }: { sessionId: string }) {
   const [callState, setCallState] = useState<"none" | "ringing" | "connected" | "ended">("none");
