@@ -45,7 +45,28 @@ def reset_retry(session_id: str):
     update_db_session(session_id, retry_count=0)
 
 
+
+def is_valid_name(name: str) -> bool:
+    """Check if a name looks like a real passenger name (not gibberish from STT errors)."""
+    cleaned = name.strip()
+    if len(cleaned) < 2:
+        return False
+    alpha_chars = sum(1 for c in cleaned if c.isalpha())
+    if alpha_chars < 2:
+        return False
+    # Reject gibberish: too many non-alpha chars
+    non_alpha_ratio = sum(1 for c in cleaned if not c.isalpha() and c != " ") / max(len(cleaned), 1)
+    if non_alpha_ratio > 0.5:
+        return False
+    # Common STT hallucination patterns
+    gibberish = ["and so on", "um", "uh", "like", "you know", "hmm", "ah", "yeah"]
+    if cleaned.lower() in gibberish:
+        return False
+    return True
+
+
 def check_retry_escalation(session_id: str, user_lang: str = "") -> VoiceCommandResponse | None:
+
     """Check if retry count exceeded threshold and return escalation if so."""
     session = get_session(session_id)
     count = int(session.get("retry_count", 0)) if session else 0
@@ -599,15 +620,16 @@ async def handle_provide_name(params: dict, response_text: str, session_id: str 
     user_lang = params.get("user_lang", "")
     sid = session_id or params.get("session_id", "")
 
-    if not name:
+    if not name or not is_valid_name(name):
         if sid:
             increment_retry(sid)
             esc = check_retry_escalation(sid, user_lang)
             if esc:
                 return esc
+        logger.info("Invalid name: %r — retrying" % name if name else "No name provided — retrying")
         return VoiceCommandResponse(
             intent="provide_name", parameters=params,
-            response_text=translate_text("I didn't catch your name. Could you please say it again?", user_lang),
+            response_text=translate_text("I didn't catch your name clearly. Could you please say your full name again?", user_lang),
         )
 
     if sid:

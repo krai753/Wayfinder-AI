@@ -250,6 +250,40 @@ async def voice_command(req: VoiceCommandRequest):
         elif intent == "confirm_booking":
             return await handle_confirm_booking(params, response_text, req.session_id)
         elif intent == "help":
+            # Check if we're mid-booking — offer to continue or escalate
+            if req.session_id:
+                session_data = get_wizard_session(req.session_id)
+                if session_data:
+                    step = session_data.get("current_step", "")
+                    if step in ("passenger", "confirmation", "collecting_fields"):
+                        missing = get_missing_booking_fields(req.session_id)
+                        if missing and "passenger_name" in missing:
+                            # User tried to say name but AI didn't understand — retry with escalation
+                            from voice_actions import increment_retry, check_retry_escalation
+                            increment_retry(req.session_id)
+                            esc = check_retry_escalation(req.session_id)
+                            if esc:
+                                return esc
+                            return VoiceCommandResponse(
+                                intent="collect_booking_info",
+                                parameters={"missing_fields": missing, "next_field": "passenger_name"},
+                                response_text="I didn't catch your name clearly. Could you please say your full name again?",
+                            )
+                        # Other mid-booking help — offer escalation
+                        ticket_id = f"TKT{uuid.uuid4().hex[:8].upper()}"
+                        user_name = session_data.get("passenger_name", "Guest")
+                        create_cs_ticket(ticket_id, session_id=req.session_id, user_name=user_name,
+                                         issue="User asked for help during booking flow")
+                        return VoiceCommandResponse(
+                            intent="cs_escalation",
+                            parameters={"reason": "booking_help_request", "ticket_id": ticket_id,
+                                         "session_id": req.session_id, "last_agent_message_id": 0},
+                            response_text=(
+                                "It looks like you're having trouble with your booking. "
+                                "Let me connect you to a customer service agent. "
+                                "You can check for messages by saying 'check my messages'. "
+                            ),
+                        )
             return VoiceCommandResponse(
                 intent="help", parameters=params,
                 response_text=(
