@@ -86,6 +86,12 @@ async def cs_dashboard():
     return FileResponse("static/cs_dashboard.html")
 
 
+@app.get("/simulator")
+async def voice_simulator():
+    """Serve the Voice Simulator for testing."""
+    return FileResponse("static/voice-simulator.html")
+
+
 @app.get("/")
 async def root():
     """Health check and API overview."""
