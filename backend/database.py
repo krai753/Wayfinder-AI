@@ -131,6 +131,12 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
+    # Add low_confidence_count column to sessions
+    try:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN low_confidence_count INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
     conn.close()
 
 

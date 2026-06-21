@@ -270,27 +270,16 @@ export default function VoiceScreen({
             cmdResult.intent === "search_flights" &&
             cmdResult.parameters?.offers?.length > 0
           ) {
-            // Had flight results — auto-listen for selection
-            autoListenRef.current = true;
+            // Flight results shown — prompt user to tap mic to choose
+            autoListenRef.current = false;
             setState("auto_listening");
-            // Small delay then auto-record
-            pendingTimeoutRef.current = setTimeout(() => {
-              if (autoListenRef.current) {
-                startRecording();
-              }
-            }, 800);
           } else if (
             cmdResult.intent === "select_flight" ||
             cmdResult.intent === "provide_name"
           ) {
-            // Waiting for next input — auto-listen
-            autoListenRef.current = true;
+            // Waiting for next input — show mic prompt, user must tap
+            autoListenRef.current = false;
             setState("auto_listening");
-            pendingTimeoutRef.current = setTimeout(() => {
-              if (autoListenRef.current) {
-                startRecording();
-              }
-            }, 800);
           } else if (cmdResult.intent === "help") {
             // Help shown — wait for user to tap again
             autoListenRef.current = false;
@@ -300,14 +289,9 @@ export default function VoiceScreen({
             setState("initial");
             setConversationLog((prev) => [...prev, `📞 CS AGENT: ${cmdResult.response_text}`]);
           } else if (cmdResult.intent === "collect_booking_info") {
-            // Still collecting fields — auto-listen
-            autoListenRef.current = true;
+            // Still collecting fields — prompt user to tap mic
+            autoListenRef.current = false;
             setState("auto_listening");
-            pendingTimeoutRef.current = setTimeout(() => {
-              if (autoListenRef.current) {
-                startRecording();
-              }
-            }, 800);
           } else {
             // Default: wait for user input
             autoListenRef.current = false;
@@ -429,9 +413,22 @@ export default function VoiceScreen({
       setState("speaking");
       await playTts(result.response_text);
 
-      if (result.parameters?.booking_complete === true) {
+      const isComplete = result.parameters?.booking_complete === true;
+
+      if (isComplete) {
         setBookingResult(result.parameters);
         setState("booking_complete");
+      } else if (
+        result.intent === "search_flights" &&
+        result.parameters?.offers?.length > 0
+      ) {
+        setState("auto_listening");
+      } else if (
+        result.intent === "select_flight" ||
+        result.intent === "provide_name" ||
+        result.intent === "collect_booking_info"
+      ) {
+        setState("auto_listening");
       } else {
         setState("initial");
       }
@@ -542,21 +539,42 @@ export default function VoiceScreen({
 
         {(state === "recording" || state === "auto_listening") && (
           <div className="flex flex-col items-center gap-6">
-            <motion.button
-              onClick={stopRecording}
-              className="w-52 h-52 rounded-full flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-[#4F46E5]/50"
-              style={{
-                background: "linear-gradient(135deg,#4F46E5,#6366f1)",
-                border: "3px solid rgba(255,255,255,0.2)",
-                boxShadow: "0 0 50px rgba(79,70,229,0.5)",
-              }}
-              whileTap={{ scale: 0.9 }}
-            >
-              <MicOff size={72} color="#fff" />
-            </motion.button>
-            <VoiceWave active={true} size="lg" />
+            {state === "auto_listening" ? (
+              // Auto-listening: show mic prompt — tap to speak
+              <motion.button
+                onClick={async () => {
+                  autoListenRef.current = false;
+                  await startRecording();
+                }}
+                className="w-52 h-52 rounded-full flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-[#4F46E5]/50 active:scale-90 transition-transform select-none"
+                style={{
+                  background:
+                    "linear-gradient(135deg,rgba(79,70,229,0.2),rgba(99,102,241,0.1))",
+                  border: "3px solid rgba(79,70,229,0.3)",
+                  boxShadow: "0 0 30px rgba(79,70,229,0.2)",
+                }}
+                whileTap={{ scale: 0.9 }}
+              >
+                <Mic size={72} color="#fff" />
+              </motion.button>
+            ) : (
+              // Recording: show stop button
+              <motion.button
+                onClick={stopRecording}
+                className="w-52 h-52 rounded-full flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-[#4F46E5]/50"
+                style={{
+                  background: "linear-gradient(135deg,#4F46E5,#6366f1)",
+                  border: "3px solid rgba(255,255,255,0.2)",
+                  boxShadow: "0 0 50px rgba(79,70,229,0.5)",
+                }}
+                whileTap={{ scale: 0.9 }}
+              >
+                <MicOff size={72} color="#fff" />
+              </motion.button>
+            )}
+            <VoiceWave active={state === "recording"} size="lg" />
             <p className="text-lg font-bold text-[#4F46E5]">
-              {state === "auto_listening" ? "Listening..." : "Recording..."}
+              {state === "recording" ? "Recording..." : "Tap to speak"}
             </p>
             {conversationLog.length > 0 && (
               <p className="text-sm italic text-white/60 max-w-xs text-center">
