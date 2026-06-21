@@ -271,31 +271,49 @@ async def voice_command(req: VoiceCommandRequest):
                                     parameters={"missing_fields": missing, "next_field": "passenger_name"},
                                     response_text="I didn't catch your name clearly. Could you please say your full name again?",
                                 )
-                            break
-                        # Other mid-booking help — offer escalation
-                        ticket_id = f"TKT{uuid.uuid4().hex[:8].upper()}"
-                        user_name = session_data.get("passenger_name", "Guest")
-                        create_cs_ticket(ticket_id, session_id=req.session_id, user_name=user_name,
-                                         issue="User asked for help during booking flow")
+                        else:
+                            # Other mid-booking help — offer escalation
+                            ticket_id = f"TKT{uuid.uuid4().hex[:8].upper()}"
+                            user_name = session_data.get("passenger_name", "Guest")
+                            create_cs_ticket(ticket_id, session_id=req.session_id, user_name=user_name,
+                                             issue="User asked for help during booking flow")
+                            resp = VoiceCommandResponse(
+                                intent="cs_escalation",
+                                parameters={"reason": "booking_help_request", "ticket_id": ticket_id,
+                                             "session_id": req.session_id, "last_agent_message_id": 0},
+                                response_text=(
+                                    "It looks like you're having trouble with your booking. "
+                                    "Let me connect you to a customer service agent. "
+                                    "You can check for messages by saying 'check my messages'. "
+                                ),
+                            )
+                    else:
                         resp = VoiceCommandResponse(
-                            intent="cs_escalation",
-                            parameters={"reason": "booking_help_request", "ticket_id": ticket_id,
-                                         "session_id": req.session_id, "last_agent_message_id": 0},
+                            intent="help", parameters=params,
                             response_text=(
-                                "It looks like you're having trouble with your booking. "
-                                "Let me connect you to a customer service agent. "
-                                "You can check for messages by saying 'check my messages'. "
+                                "I can help you search for flights, book a trip, "
+                                "cancel or reschedule an existing booking, or check your flight history. "
+                                "Just tell me what you need!"
                             ),
                         )
-                        break
-            resp = VoiceCommandResponse(
-                intent="help", parameters=params,
-                response_text=(
-                    "I can help you search for flights, book a trip, "
-                    "cancel or reschedule an existing booking, or check your flight history. "
-                    "Just tell me what you need!"
-                ),
-            )
+                else:
+                    resp = VoiceCommandResponse(
+                        intent="help", parameters=params,
+                        response_text=(
+                            "I can help you search for flights, book a trip, "
+                            "cancel or reschedule an existing booking, or check your flight history. "
+                            "Just tell me what you need!"
+                        ),
+                    )
+            else:
+                resp = VoiceCommandResponse(
+                    intent="help", parameters=params,
+                    response_text=(
+                        "I can help you search for flights, book a trip, "
+                        "cancel or reschedule an existing booking, or check your flight history. "
+                        "Just tell me what you need!"
+                    ),
+                )
         elif intent == "cs_escalation":
             sid = req.session_id or ""
             ticket_id = f"TKT{uuid.uuid4().hex[:8].upper()}"

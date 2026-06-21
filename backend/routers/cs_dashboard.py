@@ -201,10 +201,58 @@ async def agent_book_for_user(
         location = location.strip().upper()
         if len(location) == 3 and location.isalpha():
             return location  # Already an IATA code
-        results = search_airports(location, limit=5)
+        # Priority mappings for well-known destinations
+        PRIORITY = {
+            "LONDON": "LHR",
+            "TOKYO": "NRT",
+            "PARIS": "CDG",
+            "NEW YORK": "JFK",
+            "NEWYORK": "JFK",
+            "LOS ANGELES": "LAX",
+            "LOSANGELES": "LAX",
+            "SAN FRANCISCO": "SFO",
+            "SANFRANCISCO": "SFO",
+            "DUBAI": "DXB",
+            "SINGAPORE": "SIN",
+            "BANGKOK": "BKK",
+            "HONG KONG": "HKG",
+            "HONGKONG": "HKG",
+            "SEOUL": "ICN",
+            "BEIJING": "PEK",
+            "SHANGHAI": "PVG",
+            "MUMBAI": "BOM",
+            "DELHI": "DEL",
+            "SYDNEY": "SYD",
+            "MELBOURNE": "MEL",
+            "AMSTERDAM": "AMS",
+            "FRANKFURT": "FRA",
+            "MUNICH": "MUC",
+            "ROME": "FCO",
+            "MILAN": "MXP",
+            "MADRID": "MAD",
+            "BARCELONA": "BCN",
+            "CHICAGO": "ORD",
+            "BOSTON": "BOS",
+            "WASHINGTON": "IAD",
+            "MIAMI": "MIA",
+            "TORONTO": "YYZ",
+            "ISTANBUL": "IST",
+            "DUBLIN": "DUB",
+            "MANCHESTER": "MAN",
+            "BERLIN": "BER",
+        }
+        if location in PRIORITY:
+            chosen_iata = PRIORITY[location]
+            logger.info(f"City resolve: '{location}' → {chosen_iata} (priority)")
+            return chosen_iata
+        results = search_airports(location, limit=10)
         if not results:
             raise HTTPException(status_code=400, detail=f"Could not find airport for: {location}")
-        return results[0]["iata"]
+        # Prefer "International" or full named airports for less common cities
+        results.sort(key=lambda r: (-len(r["name"]), r["iata"]))
+        chosen = results[0]
+        logger.info(f"City resolve: '{location}' → {chosen['iata']} ({chosen['name']})")
+        return chosen["iata"]
 
     origin_iata = resolve_code(origin)
     dest_iata = resolve_code(destination)
