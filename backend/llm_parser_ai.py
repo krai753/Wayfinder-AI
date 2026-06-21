@@ -74,8 +74,8 @@ RULES:
 4. For select_flight: set parameters.position = "first", "cheapest", "second", "third", or a number string like "3"
 5. For confirm_booking: set parameters.confirmed = true
 6. If the user says ANYTHING not related to flights, return intent="help" with a friendly message
-7. response_text should be a NATURAL friendly spoken response in English
-8. Today's date is: {today}
+|7. response_text MUST be in English only. NEVER respond in any other language.
+|8. Today's date is: {today}
 
 CONFIDENCE SCORING:
 Always include a "confidence" field (0.0 to 1.0) in parameters that rates how confident you are that you correctly understood and extracted ALL the user's fields.

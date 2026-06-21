@@ -244,9 +244,15 @@ export default function VoiceScreen({
           setConversationLog((prev) => [...prev, `🎤 ${transcript}`]);
           setState("processing");
 
-          // Send text to voice command API
+          // Send text to voice command API (with 25s timeout)
           const sid = sessionIdRef.current;
-          const cmdResult = await api.voiceCommand(transcript, sid || undefined);
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Request timed out. Please try again.")), 25000)
+          );
+          const cmdResult = await Promise.race([
+            api.voiceCommand(transcript, sid || undefined),
+            timeoutPromise,
+          ]) as any;
 
           // Save session ID for continued conversation
           if (cmdResult.parameters?.session_id) {
@@ -403,7 +409,13 @@ export default function VoiceScreen({
 
     try {
       const sid = sessionIdRef.current;
-      const result = await api.voiceCommand(text, sid || undefined);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Request timed out. Please try again.")), 25000)
+      );
+      const result = await Promise.race([
+        api.voiceCommand(text, sid || undefined),
+        timeoutPromise,
+      ]) as any;
 
       if (result.parameters?.session_id) {
         setSessionId(result.parameters.session_id);

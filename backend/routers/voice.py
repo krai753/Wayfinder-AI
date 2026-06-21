@@ -29,6 +29,38 @@ from wizard_manager import create_wizard_session, get_wizard_session, process_st
 router = APIRouter(prefix="/api/voice", tags=["voice"])
 logger = logging.getLogger("wayfinder.voice_router")
 
+# ── Non-English text detection ──────────────────────────────────
+# Basic check: if >50% of chars are non-ASCII, treat as foreign
+ENGLISH_FALLBACKS = {
+    "collect_booking_info": "What is the passenger's full name?",
+    "search_flights": "I found some flights. Would you like to book one?",
+    "select_flight": "Say 'the first one' or 'the cheapest' to select a flight.",
+    "provide_name": "Thank you. Please continue with your booking.",
+    "confirm_booking": "Your booking is confirmed!",
+    "help": "I can help you book flights. Try saying 'book a flight from New York to London'.",
+    "cancel_booking": "I'll help you cancel a booking.",
+    "reschedule_booking": "I'll help you reschedule a booking.",
+    "view_history": "Here are your recent trips.",
+    "view_portfolio": "Here are your travel stats.",
+}
+
+
+def is_english(text: str) -> bool:
+    """Quick check if text is likely English (>80% ASCII)."""
+    if not text:
+        return True
+    ascii_chars = sum(1 for c in text if ord(c) < 128 or c in " '.,!?-:;")
+    return ascii_chars / len(text) > 0.8
+
+
+def sanitize_response_text(text: str, intent: str) -> str:
+    """If the AI returned non-English text, replace with hardcoded English."""
+    if text and is_english(text):
+        return text
+    fallback = ENGLISH_FALLBACKS.get(intent, "I understood your request. How can I help you?")
+    logger.warning(f"Non-English response detected for intent={intent}, replacing with fallback. Original: {text[:50]}...")
+    return fallback
+
 
 # ── MAIN VOICE COMMAND ────────────────────────────────────────────
 
@@ -72,6 +104,14 @@ async def voice_command(req: VoiceCommandRequest):
     intent = result.get("intent", "help")
     params = result.get("parameters", {})
     response_text = result.get("response_text", "")
+
+    # ── LANGUAGE FIX: Force English always ──────────────────
+    # The AI parser sometimes hallucinates foreign languages
+    if "user_lang" in params:
+        del params["user_lang"]
+
+    # Sanitize response_text — if it looks non-English, use a hardcoded fallback
+    response_text = sanitize_response_text(response_text, intent)
 
     # ── MANUAL PASSENGER COUNT DETECTION ───────────────────
     if req.session_id and result.get("intent") in ("unknown", "help", "search_flights", "confirm_booking"):
