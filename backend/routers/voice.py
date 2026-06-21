@@ -533,7 +533,7 @@ async def _handle_search_flights(params: dict, response_text: str, session_id: s
                 f"No flights found on {dep_date}, but I found {len(closest['offers'])} flights "
                 f"on {closest['date']}. The cheapest is {cheapest_alt['airline']} "
                 f"at {cheapest_alt['price']} {cheapest_alt['currency']}. "
-                f"Would that date work?"
+                f"Would that date work for you?"
             )
             offers = closest["offers"]
             # Cache alt offers
@@ -546,7 +546,8 @@ async def _handle_search_flights(params: dict, response_text: str, session_id: s
         speech = (
             f"I found {len(offers)} flights from {origin} to {destination} on {dep_date}. "
             f"The cheapest is {cheapest['airline']} flight {cheapest['flight_number']} "
-            f"at {cheapest['price']} {cheapest['currency']}."
+            f"at {cheapest['price']} {cheapest['currency']}. "
+            f"Would you like to book the cheapest flight? Say yes or tell me your name to proceed."
         )
 
     return VoiceCommandResponse(

@@ -16,6 +16,7 @@ class WizardStep(str, Enum):
     assistance = "assistance"
     confirmation = "confirmation"
     completed = "completed"
+    collecting_fields = "collecting_fields"
 
 
 class AirportSearchRequest(BaseModel):
