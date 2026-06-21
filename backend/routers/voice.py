@@ -125,6 +125,7 @@ def _resolve_iata(city_or_code: str) -> str:
 
 def _save_extracted_fields(session_id: str, params: dict):
     """Save any booking fields extracted by the AI parser into the wizard session."""
+    from database import update_session as update_db_session
     field_map = {
         "origin": "origin",
         "destination": "destination",
@@ -142,13 +143,14 @@ def _save_extracted_fields(session_id: str, params: dict):
                 existing_val = existing.get(session_key)
                 if existing_val:
                     continue  # Don't overwrite existing values
-            process_step(session_id, session_key, {session_key: value})
+            # Use update_session directly (process_step validates enum and only handles wizard steps)
+            update_db_session(session_id, **{session_key: value})
             logger.info(f"Booking collector: saved {session_key} = {value}")
 
     # Mark session as in collecting mode
     session = get_wizard_session(session_id)
     if session and session.get("current_step") not in ("collecting_fields", "flight_selection", "passenger", "confirmation", "completed"):
-        process_step(session_id, "current_step", {"current_step": "collecting_fields"})
+        update_db_session(session_id, current_step="collecting_fields")
 
 
 def _get_missing_booking_fields(session_id: str) -> list:
@@ -228,10 +230,11 @@ async def voice_command(req: VoiceCommandRequest):
         from llm_orchestrator import _extract_passengers
         extracted = _extract_passengers(req.text)
         if extracted and extracted > 0:
+            from database import update_session as update_db_session
             existing_session = get_wizard_session(req.session_id) if req.session_id else None
             existing_passengers = int(existing_session.get("passengers", 0)) if existing_session else 0
             if not existing_passengers:
-                process_step(req.session_id, "passengers", {"passengers": extracted})
+                update_db_session(req.session_id, passengers=extracted)
                 logger.info(f"Extracted passengers={extracted} from '{req.text}'")
                 # Continue to confirmation
                 params["passengers"] = extracted
@@ -450,7 +453,8 @@ async def _handle_search_flights(params: dict, response_text: str, session_id: s
             process_step(sid, "destination", {"destination": destination})
         if dep_date:
             process_step(sid, "departure_date", {"departure_date": dep_date})
-        process_step(sid, "current_step", {"current_step": "collecting_fields"})
+        from database import update_session as update_db_session
+        update_db_session(sid, current_step="collecting_fields")
 
         # Check missing fields
         missing = _get_missing_booking_fields(sid)
@@ -547,7 +551,7 @@ async def _handle_search_flights(params: dict, response_text: str, session_id: s
             f"I found {len(offers)} flights from {origin} to {destination} on {dep_date}. "
             f"The cheapest is {cheapest['airline']} flight {cheapest['flight_number']} "
             f"at {cheapest['price']} {cheapest['currency']}. "
-            f"Would you like to book the cheapest flight? Say yes or tell me your name to proceed."
+            f"Would you like to book the cheapest flight? Just say yes to continue."
         )
 
     return VoiceCommandResponse(
