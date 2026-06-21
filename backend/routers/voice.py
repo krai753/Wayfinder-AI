@@ -218,23 +218,36 @@ async def voice_command(req: VoiceCommandRequest):
     params = result.get("parameters", {})
     response_text = result.get("response_text", "")
 
-    # ── CONFIDENCE CHECK — route to CS if below 95% ────────────
+    # ── CONFIDENCE GATE — track across 3 consecutive cycles ────
     confidence = float(params.get("confidence", 1.0))
-    # Skip confidence check if in booking collection mode (multi-turn context)
     in_collection_mode = False
+    low_conf_count = 0
     if req.session_id:
         session = get_wizard_session(req.session_id)
-        if session and session.get("current_step") == "collecting_fields":
-            in_collection_mode = True
+        if session:
+            if session.get("current_step") == "collecting_fields":
+                in_collection_mode = True
+            low_conf_count = int(session.get("low_confidence_count", 0))
 
-    if not in_collection_mode and confidence < 0.95 and intent in ("search_flights", "search_with_budget", "provide_name"):
-        logger.warning(f"Low confidence ({confidence}) — escalating to CS")
+    # Update confidence tracker
+    if confidence < 0.75:
+        low_conf_count += 1
+        if req.session_id:
+            process_step(req.session_id, "low_confidence_count", {"low_confidence_count": low_conf_count})
+    else:
+        low_conf_count = 0
+        if req.session_id:
+            process_step(req.session_id, "low_confidence_count", {"low_confidence_count": 0})
+
+    # Escalate if 3 consecutive low-confidence cycles
+    if not in_collection_mode and low_conf_count >= 3:
+        logger.warning(f"3 consecutive low-confidence cycles — escalating to CS")
         return VoiceCommandResponse(
             intent="cs_escalation",
-            parameters={"confidence": confidence, "original_text": req.text},
+            parameters={"confidence": confidence, "low_confidence_count": low_conf_count, "original_text": req.text},
             response_text=(
-                "I'm sorry, I didn't quite get that clearly enough to proceed safely. "
-                "Let me connect you to a customer service agent who can help you directly. "
+                "I'm having trouble understanding you clearly. "
+                "Let me connect you to a customer service agent who can assist you directly. "
                 "Please hold the line."
             ),
         )
@@ -296,6 +309,14 @@ async def voice_command(req: VoiceCommandRequest):
             )
 
         elif intent == "cancel_booking":
+            # Check if in-booking rejection → CS escalation
+            if _needs_cs_escalation(intent, params, req.session_id):
+                logger.info(f"Booking rejection detected — routing to CS")
+                return VoiceCommandResponse(
+                    intent="cs_escalation",
+                    parameters={"reason": "booking_rejection", "session_id": req.session_id or ""},
+                    response_text="I understand you'd like to stop. Let me connect you to a customer service agent who can help. Please hold the line.",
+                )
             return await _handle_cancel_booking(params, response_text)
 
         elif intent == "reschedule_booking":
@@ -346,6 +367,21 @@ async def voice_command(req: VoiceCommandRequest):
             parameters=params,
             response_text=f"Sorry, something went wrong: {str(e)}",
         )
+
+
+# ── Rejection → CS escalation ────────────────────────────────
+
+
+def _needs_cs_escalation(intent: str, params: dict, session_id: str | None) -> bool:
+    """Check if user rejected the booking and needs CS escalation."""
+    # User said no/cancel during confirmation or booking flow
+    if intent in ("cancel_booking", "help") and session_id:
+        session = get_wizard_session(session_id)
+        if session:
+            step = session.get("current_step", "")
+            if step in ("confirmation", "flight_selection", "passenger", "collecting_fields"):
+                return True
+    return False
 
 
 # ── Intent Handlers ───────────────────────────────────────────────
@@ -401,7 +437,41 @@ async def _handle_search_flights(params: dict, response_text: str, session_id: s
 
     # Build response
     if not offers:
-        speech = f"No flights found from {origin} to {destination} on {dep_date}."
+        # ── ALTERNATE DATE QUERY — try +/- 3 days ──────────
+        from datetime import timedelta
+        alt_results = []
+        try:
+            base = datetime.strptime(dep_date, "%Y-%m-%d").date()
+            for delta in [-3, -2, -1, 1, 2, 3]:
+                alt_date = (base + timedelta(days=delta)).isoformat()
+                try:
+                    alt_raw = await duffel.search_flights(
+                        origin=origin, destination=destination,
+                        departure_date=alt_date, passengers=passengers,
+                    )
+                    alt_offers = duffel.simplify_offers(alt_raw)
+                    if alt_offers:
+                        alt_results.append({"date": alt_date, "offers": alt_offers[:3]})
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        if alt_results:
+            closest = min(alt_results, key=lambda r: abs((datetime.strptime(r["date"], "%Y-%m-%d").date() - base).days))
+            cheapest_alt = min(closest["offers"], key=lambda o: float(o.get("price", 0) or 0))
+            speech = (
+                f"No flights found on {dep_date}, but I found {len(closest['offers'])} flights "
+                f"on {closest['date']}. The cheapest is {cheapest_alt['airline']} "
+                f"at {cheapest_alt['price']} {cheapest_alt['currency']}. "
+                f"Would that date work?"
+            )
+            offers = closest["offers"]
+            # Cache alt offers
+            for offer in offers:
+                save_offer(sid, offer["id"], offer)
+        else:
+            speech = f"No flights found from {origin} to {destination} on {dep_date} or nearby dates."
     else:
         cheapest = min(offers, key=lambda o: float(o.get("price", 0) or 0))
         speech = (
@@ -772,13 +842,24 @@ async def voice_speak(text: str = Query(..., description="Text to convert to spe
 async def cs_escalate(session_id: str = "", issue: str = ""):
     """
     Escalate to a mock customer service agent.
+    Creates a CS ticket in the database.
     In production, this would route to Twilio/Vonage to call a CS agent.
     """
     logger.info(f"CS escalation triggered: session={session_id}, issue={issue}")
+    from database import create_cs_ticket
+    ticket_id = f"TKT{uuid.uuid4().hex[:8].upper()}"
+    # Get user name from session if available
+    user_name = "Guest"
+    if session_id:
+        session = get_wizard_session(session_id)
+        if session and session.get("passenger_name"):
+            user_name = session["passenger_name"]
+    ticket = create_cs_ticket(ticket_id, session_id=session_id, user_name=user_name, issue=issue or "Voice assistant escalation")
     return {
         "status": "escalated",
+        "ticket_id": ticket_id,
         "session_id": session_id,
-        "message": "A customer service agent has been notified. They will call you shortly.",
+        "message": "A customer service agent has been notified. They will be with you shortly.",
         "mock_phone": "+1-555-WAYFINDER",
         "estimated_wait": "2-3 minutes",
     }

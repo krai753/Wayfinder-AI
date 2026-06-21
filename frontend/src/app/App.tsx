@@ -23,6 +23,7 @@ import TripDetailScreen from "../components/screens/TripDetailScreen";
 import CancelScreen from "../components/screens/CancelScreen";
 import RescheduleScreen from "../components/screens/RescheduleScreen";
 import PortfolioScreen from "../components/screens/PortfolioScreen";
+import CSDashboard from "../components/screens/CSDashboard";
 
 import type { FlightOffer, BookingResult } from "../types";
 import { api } from "../services/api";
@@ -33,7 +34,7 @@ type Screen =
   | "splash" | "home"
   | "voice" | "results" | "passenger" | "confirm" | "success"
   | "bookings" | "tripDetail" | "cancel" | "reschedule" | "portfolio"
-  | "profile";
+  | "profile" | "cs_dashboard";
 
 // ── SHARED SCREEN STATE ─────────────────────────────────────────
 
@@ -163,8 +164,9 @@ function BottomNav({ current, navigate }: { current: Screen; navigate: (s: Scree
     { screen: "bookings", icon: <Bookmark size={22} />, label: "Trips" },
     { screen: "voice", icon: <MessageSquare size={22} />, label: "AI" },
     { screen: "portfolio", icon: <User size={22} />, label: "Profile" },
+    { screen: "cs_dashboard", icon: <Headphones size={22} />, label: "CS" },
   ];
-  const showNav = ["home", "voice", "bookings", "portfolio", "results", "passenger"].includes(current);
+  const showNav = ["home", "voice", "bookings", "portfolio", "results", "passenger", "cs_dashboard"].includes(current);
   if (!showNav) return null;
 
   return (
@@ -481,6 +483,9 @@ export default function App() {
             onBack={() => navigate("home")}
           />
         );
+
+      case "cs_dashboard":
+        return <CSDashboard />;
 
       default:
         return <HomeScreen navigate={navigate} />;

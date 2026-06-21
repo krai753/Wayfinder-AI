@@ -42,6 +42,7 @@ def init_db():
             passenger_name TEXT,
             passenger_assistance TEXT,
             booking_reference TEXT,
+            low_confidence_count INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -72,6 +73,26 @@ def init_db():
             selected INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (session_id) REFERENCES sessions(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS cs_tickets (
+            id TEXT PRIMARY KEY,
+            session_id TEXT,
+            user_name TEXT DEFAULT 'Guest',
+            issue TEXT DEFAULT '',
+            status TEXT DEFAULT 'open',
+            agent_id TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS cs_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticket_id TEXT NOT NULL,
+            sender TEXT NOT NULL,
+            message TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (ticket_id) REFERENCES cs_tickets(id)
         );
     """)
     conn.commit()
@@ -300,3 +321,83 @@ def update_booking_status(booking_id: str, status: str, **kwargs):
     )
     conn.commit()
     conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════
+# CS DASHBOARD — Tickets & Agent Messaging
+# ═══════════════════════════════════════════════════════════════════
+
+
+def create_cs_ticket(ticket_id: str, session_id: str = "", user_name: str = "Guest", issue: str = "") -> dict:
+    """Create a new CS ticket."""
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO cs_tickets (id, session_id, user_name, issue) VALUES (?, ?, ?, ?)",
+        (ticket_id, session_id, user_name, issue),
+    )
+    conn.commit()
+    conn.close()
+    return {"id": ticket_id, "session_id": session_id, "user_name": user_name, "issue": issue, "status": "open"}
+
+
+def get_cs_tickets(status: str = "") -> list[dict]:
+    """Get CS tickets, optionally filtered by status."""
+    conn = get_db()
+    if status:
+        rows = conn.execute(
+            "SELECT * FROM cs_tickets WHERE status = ? ORDER BY created_at DESC", (status,)
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM cs_tickets ORDER BY created_at DESC"
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_cs_ticket(ticket_id: str) -> dict | None:
+    """Get a single CS ticket by ID."""
+    conn = get_db()
+    row = conn.execute("SELECT * FROM cs_tickets WHERE id = ?", (ticket_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_cs_ticket(ticket_id: str, **kwargs):
+    """Update CS ticket fields (status, agent_id, etc.)."""
+    if not kwargs:
+        return
+    sets = ", ".join(f"{k} = ?" for k in kwargs.keys())
+    vals = list(kwargs.values())
+    vals.append(ticket_id)
+    conn = get_db()
+    conn.execute(
+        f"UPDATE cs_tickets SET {sets}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        vals,
+    )
+    conn.commit()
+    conn.close()
+
+
+def add_cs_message(ticket_id: str, sender: str, message: str) -> dict:
+    """Add a message to a CS ticket conversation."""
+    conn = get_db()
+    cursor = conn.execute(
+        "INSERT INTO cs_messages (ticket_id, sender, message) VALUES (?, ?, ?)",
+        (ticket_id, sender, message),
+    )
+    msg_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return {"id": msg_id, "ticket_id": ticket_id, "sender": sender, "message": message}
+
+
+def get_cs_messages(ticket_id: str) -> list[dict]:
+    """Get all messages for a CS ticket."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM cs_messages WHERE ticket_id = ? ORDER BY created_at ASC",
+        (ticket_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]

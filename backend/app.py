@@ -20,6 +20,7 @@ from routers import booking as booking_router
 from routers import wizard as wizard_router
 from routers import manage as manage_router
 from routers import voice as voice_router
+from routers import cs_dashboard as cs_router
 from llm_parser_ai import ai_parser
 
 logging.basicConfig(level=logging.INFO)
@@ -70,6 +71,7 @@ app.include_router(booking_router.router)
 app.include_router(wizard_router.router)
 app.include_router(manage_router.router)
 app.include_router(voice_router.router)
+app.include_router(cs_router.router)
 
 
 @app.get("/")
