@@ -22,6 +22,7 @@ from voice_actions import (
     handle_view_history, handle_view_portfolio, handle_search_with_budget,
     handle_select_flight, handle_provide_name, handle_confirm_booking,
     save_extracted_fields, get_missing_booking_fields, needs_cs_escalation,
+    increment_retry, reset_retry, check_retry_escalation,
 )
 from airport_data import search_airports, get_airport
 from database import create_cs_ticket, get_cs_ticket_by_session, get_user_agent_messages, update_session as update_db_session
@@ -220,35 +221,36 @@ async def voice_command(req: VoiceCommandRequest):
     # 4. Route to the appropriate handler
     try:
         if intent == "search_flights":
-            return await handle_search_flights(params, response_text, req.session_id)
+            resp = await handle_search_flights(params, response_text, req.session_id)
         elif intent == "book_flight":
-            return VoiceCommandResponse(
+            resp = VoiceCommandResponse(
                 intent="help", parameters=params,
                 response_text="Try saying 'search flights from New York to London' to get started.",
             )
         elif intent == "cancel_booking":
             if needs_cs_escalation(intent, params, req.session_id):
                 logger.info("Booking rejection detected — routing to CS")
-                return VoiceCommandResponse(
+                resp = VoiceCommandResponse(
                     intent="cs_escalation",
                     parameters={"reason": "booking_rejection", "session_id": req.session_id or ""},
                     response_text="I understand you'd like to stop. Let me connect you to a customer service agent who can help. Please hold the line.",
                 )
-            return await handle_cancel_booking(params, response_text)
+            else:
+                resp = await handle_cancel_booking(params, response_text)
         elif intent == "reschedule_booking":
-            return await handle_reschedule_booking(params, response_text)
+            resp = await handle_reschedule_booking(params, response_text)
         elif intent == "view_history":
-            return await handle_view_history(params, response_text)
+            resp = await handle_view_history(params, response_text)
         elif intent == "view_portfolio":
-            return await handle_view_portfolio(params, response_text)
+            resp = await handle_view_portfolio(params, response_text)
         elif intent == "search_with_budget":
-            return await handle_search_with_budget(params, response_text, req.session_id)
+            resp = await handle_search_with_budget(params, response_text, req.session_id)
         elif intent == "select_flight":
-            return await handle_select_flight(params, response_text, req.session_id)
+            resp = await handle_select_flight(params, response_text, req.session_id)
         elif intent == "provide_name":
-            return await handle_provide_name(params, response_text, req.session_id)
+            resp = await handle_provide_name(params, response_text, req.session_id)
         elif intent == "confirm_booking":
-            return await handle_confirm_booking(params, response_text, req.session_id)
+            resp = await handle_confirm_booking(params, response_text, req.session_id)
         elif intent == "help":
             # Check if we're mid-booking — offer to continue or escalate
             if req.session_id:
@@ -259,22 +261,23 @@ async def voice_command(req: VoiceCommandRequest):
                         missing = get_missing_booking_fields(req.session_id)
                         if missing and "passenger_name" in missing:
                             # User tried to say name but AI didn't understand — retry with escalation
-                            from voice_actions import increment_retry, check_retry_escalation
                             increment_retry(req.session_id)
                             esc = check_retry_escalation(req.session_id)
                             if esc:
-                                return esc
-                            return VoiceCommandResponse(
-                                intent="collect_booking_info",
-                                parameters={"missing_fields": missing, "next_field": "passenger_name"},
-                                response_text="I didn't catch your name clearly. Could you please say your full name again?",
-                            )
+                                resp = esc
+                            else:
+                                resp = VoiceCommandResponse(
+                                    intent="collect_booking_info",
+                                    parameters={"missing_fields": missing, "next_field": "passenger_name"},
+                                    response_text="I didn't catch your name clearly. Could you please say your full name again?",
+                                )
+                            break
                         # Other mid-booking help — offer escalation
                         ticket_id = f"TKT{uuid.uuid4().hex[:8].upper()}"
                         user_name = session_data.get("passenger_name", "Guest")
                         create_cs_ticket(ticket_id, session_id=req.session_id, user_name=user_name,
                                          issue="User asked for help during booking flow")
-                        return VoiceCommandResponse(
+                        resp = VoiceCommandResponse(
                             intent="cs_escalation",
                             parameters={"reason": "booking_help_request", "ticket_id": ticket_id,
                                          "session_id": req.session_id, "last_agent_message_id": 0},
@@ -284,7 +287,8 @@ async def voice_command(req: VoiceCommandRequest):
                                 "You can check for messages by saying 'check my messages'. "
                             ),
                         )
-            return VoiceCommandResponse(
+                        break
+            resp = VoiceCommandResponse(
                 intent="help", parameters=params,
                 response_text=(
                     "I can help you search for flights, book a trip, "
@@ -301,7 +305,7 @@ async def voice_command(req: VoiceCommandRequest):
                 if session and session.get("passenger_name"):
                     user_name = session["passenger_name"]
             create_cs_ticket(ticket_id, session_id=sid, user_name=user_name, issue="User requested human agent")
-            return VoiceCommandResponse(
+            resp = VoiceCommandResponse(
                 intent="cs_escalation",
                 parameters={"reason": "user_requested", "ticket_id": ticket_id, "session_id": sid,
                              "last_agent_message_id": 0},
@@ -312,12 +316,42 @@ async def voice_command(req: VoiceCommandRequest):
                 ),
             )
         elif intent == "check_cs_messages":
-            return await handle_check_cs_messages(params, req.session_id)
+            resp = await handle_check_cs_messages(params, req.session_id)
         else:
-            return VoiceCommandResponse(
+            resp = VoiceCommandResponse(
                 intent="help", parameters={"unknown_intent": intent},
                 response_text="I'm not sure how to help with that. Try saying 'book a flight' or 'show my trips'.",
             )
+
+        # ── UNIVERSAL RETRY TRACKING ──────────────────────────────
+        # After ANY step: if the response indicates a retry/error (system didn't
+        # understand user), increment universal counter. After 3 → CS escalation.
+        # If user made progress, reset counter.
+        if req.session_id and resp:
+            response_lower = resp.response_text.lower() if resp.response_text else ""
+            is_retry = any(kw in response_lower for kw in [
+                "didn't catch", "didn't understand", "try again",
+                "booking failed", "something went wrong",
+                "having trouble understanding",
+                "not sure how to help",
+            ])
+            # Also treat generic help intent (not cs_escalation) as retry
+            if resp.intent == "help" and not resp.parameters.get("ticket_id"):
+                is_retry = True
+            # Also treat confirm_booking with error text as retry
+            if resp.intent == "confirm_booking" and "failed" in response_lower:
+                is_retry = True
+
+            if is_retry:
+                increment_retry(req.session_id)
+                esc = check_retry_escalation(req.session_id)
+                if esc:
+                    return esc
+            else:
+                reset_retry(req.session_id)
+
+        return resp
+
     except HTTPException:
         raise
     except Exception as e:
