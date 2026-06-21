@@ -7,23 +7,20 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#060912;color:#fff;min-height:100vh;overflow:hidden}
-.flex{display:flex}.flex-col{flex-direction:column}.flex-1{flex:1}.items-center{align-items:center}.justify-between{justify-content:space-between}.gap-2{gap:8px}.gap-3{gap:12px}.gap-4{gap:16px}
+.flex{display:flex}.flex-col{flex-direction:column}.flex-1{flex:1}.items-center{align-items:center}.justify-between{justify-content:space-between}.gap-2{gap:8px}.gap-3{gap:12px}.gap-4{gap:16px}.text-center{text-align:center}
 .text-xs{font-size:11px}.text-sm{font-size:13px}.text-lg{font-size:18px}.font-bold{font-weight:700}.font-semibold{font-weight:600}
 .truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:4px}
-
-/* Layout */
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+@keyframes ring{0%{transform:rotate(0)}25%{transform:rotate(15deg)}50%{transform:rotate(0)}75%{transform:rotate(-15deg)}100%{transform:rotate(0)}}
+@keyframes wave{0%{height:8px}50%{height:24px}100%{height:8px}}
 .app{display:flex;height:100vh}
 .sidebar{width:320px;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,0.06);background:rgba(13,18,33,0.9);flex-shrink:0}
 .main{flex:1;display:flex;flex-direction:column}
-
-/* Header */
 .header{padding:20px 20px 16px;border-bottom:1px solid rgba(255,255,255,0.06)}
 .header h1{font-size:18px;font-weight:700;color:#fff;display:flex;align-items:center;gap:10px}
 .header h1 .icon{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#4F46E5,#6366f1);display:flex;align-items:center;justify-content:center;font-size:14px}
 .header .sub{font-size:11px;color:#64748B;margin-top:4px}
-
-/* Tickets */
 .ticket-list{flex:1;overflow-y:auto}
 .ticket{padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer;transition:background 0.15s;position:relative}
 .ticket:hover{background:rgba(255,255,255,0.03)}
@@ -34,55 +31,46 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .badge-open{background:rgba(245,158,11,0.12);color:#F59E0B;border:1px solid rgba(245,158,11,0.2)}
 .badge-assigned{background:rgba(79,70,229,0.12);color:#818CF8;border:1px solid rgba(79,70,229,0.2)}
 .badge-closed{background:rgba(34,197,94,0.12);color:#22C55E;border:1px solid rgba(34,197,94,0.2)}
+.badge-call{background:rgba(34,197,94,0.2);color:#22C55E;border:1px solid rgba(34,197,94,0.3);animation:pulse 1.5s infinite}
 .ticket .preview{font-size:11px;color:#64748B;margin-bottom:2px}
 .ticket .time{font-size:9px;color:#475569}
 .ticket .notification-dot{position:absolute;right:16px;top:16px;width:8px;height:8px;border-radius:50%;background:#EF4444;box-shadow:0 0 8px rgba(239,68,68,0.5);animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
 .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:40px;text-align:center;color:#64748B}
 .empty-state .icon{font-size:48px;margin-bottom:12px;opacity:0.3}
 .empty-state p{font-size:13px}.empty-state .sub{font-size:10px;color:#475569;margin-top:4px}
-
-/* Notification banner */
 .notif-banner{display:none;padding:10px 20px;background:rgba(239,68,68,0.1);border-bottom:1px solid rgba(239,68,68,0.2);font-size:12px;color:#FCA5A5;align-items:center;gap:8px}
 .notif-banner.show{display:flex}
 .notif-banner .dismiss{margin-left:auto;cursor:pointer;padding:4px;border-radius:4px;font-size:14px;color:#FCA5A5;background:transparent;border:none}
 .notif-banner .dismiss:hover{background:rgba(255,255,255,0.1)}
-
-/* Chat area */
-.chat-header{padding:16px 24px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:12px}
+.chat-header{padding:12px 24px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:12px}
 .chat-header .avatar{width:36px;height:36px;border-radius:50%;background:rgba(79,70,229,0.15);display:flex;align-items:center;justify-content:center;color:#4F46E5;font-size:14px;font-weight:700}
 .chat-header .info{flex:1}
 .chat-header .info .name{font-size:13px;font-weight:600;color:#fff}
 .chat-header .info .meta{font-size:10px;color:#64748B}
 .chat-header .actions{display:flex;gap:8px}
-.chat-header button{padding:6px 12px;border-radius:8px;font-size:10px;font-weight:600;cursor:pointer;border:none;transition:opacity 0.15s}
+.chat-header button{padding:6px 12px;border-radius:8px;font-size:10px;font-weight:600;cursor:pointer;border:none;transition:all 0.15s}
 .chat-header button:hover{opacity:0.85}
 .btn-resolve{background:rgba(34,197,94,0.12);color:#22C55E;border:1px solid rgba(34,197,94,0.2)!important}
 .btn-book{background:rgba(79,70,229,0.12);color:#818CF8;border:1px solid rgba(79,70,229,0.2)!important}
-
-/* Messages */
+.btn-call{background:rgba(34,197,94,0.15);color:#22C55E;border:1px solid rgba(34,197,94,0.25)!important;animation:pulse 2s infinite}
+.btn-hangup{background:rgba(239,68,68,0.15);color:#EF4444;border:1px solid rgba(239,68,68,0.25)!important;animation:pulse 1.5s infinite}
+.btn-ringing{background:rgba(245,158,11,0.15);color:#F59E0B;border:1px solid rgba(245,158,11,0.25)!important}
 .messages{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:12px}
 .msg{max-width:75%;padding:10px 16px;border-radius:14px;font-size:13px;line-height:1.5}
 .msg.user{background:rgba(255,255,255,0.08);align-self:flex-start;border-top-left-radius:4px}
 .msg.agent{background:linear-gradient(135deg,#4F46E5,#6366f1);align-self:flex-end;border-top-right-radius:4px}
 .msg.system{align-self:center;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);font-size:11px;color:#64748B;font-style:italic;padding:6px 14px;border-radius:20px}
 .msg .meta{font-size:9px;margin-top:4px;opacity:0.5}
-
-/* Chat input */
 .chat-input{padding:16px 24px;border-top:1px solid rgba(255,255,255,0.06)}
 .chat-input .row{display:flex;align-items:center;gap:10px;background:rgba(21,28,47,0.8);border:1px solid rgba(255,255,255,0.06);border-radius:16px;padding:6px 6px 6px 16px}
 .chat-input input{flex:1;background:transparent;border:none;color:#fff;font-size:13px;outline:none;padding:8px 0}
 .chat-input input::placeholder{color:#64748B}
 .chat-input .send-btn{width:38px;height:38px;border-radius:10px;border:none;background:linear-gradient(135deg,#4F46E5,#6366f1);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:opacity 0.15s}
 .chat-input .send-btn:disabled{opacity:0.3;cursor:default}
-
-/* Tabs */
 .tabs{display:flex;border-bottom:1px solid rgba(255,255,255,0.06)}
 .tab{padding:10px 24px;font-size:12px;font-weight:600;color:#64748B;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s}
 .tab:hover{color:#94A3B8}
 .tab.active{color:#4F46E5;border-bottom-color:#4F46E5}
-
-/* Booking Form */
 .booking-form{flex:1;overflow-y:auto;padding:24px}
 .booking-form .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .booking-form .full{grid-column:1/-1}
@@ -98,69 +86,62 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .booking-form .result.success{display:block;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);color:#22C55E}
 .booking-form .result.error{display:block;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);color:#FCA5A5}
 .booking-form .result.loading{display:block;background:rgba(79,70,229,0.1);border:1px solid rgba(79,70,229,0.2);color:#818CF8}
-
-/* No ticket selected */
 .no-ticket{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;text-align:center}
 .no-ticket .icon{width:80px;height:80px;border-radius:50%;background:rgba(79,70,229,0.08);border:2px solid rgba(79,70,229,0.12);display:flex;align-items:center;justify-content:center;font-size:32px;margin-bottom:20px}
 .no-ticket h2{font-size:18px;font-weight:700;color:#fff;margin-bottom:6px}
 .no-ticket p{font-size:12px;color:#64748B;max-width:300px;text-align:center;margin-bottom:16px}
 .no-ticket .steps{display:flex;gap:16px;font-size:10px;color:#475569}
 .no-ticket .steps span{display:flex;align-items:center;gap:4px}
-
-/* Toast */
 .toast{position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transform:translateY(-20px);transition:all 0.3s;max-width:360px}
 .toast.show{opacity:1;transform:translateY(0)}
 .toast.info{background:rgba(79,70,229,0.15);border:1px solid rgba(79,70,229,0.3);color:#818CF8}
 .toast.success{background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:#22C55E}
 .toast.error{background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#FCA5A5}
-
-/* Notification counter in sidebar header */
 .notif-counter{display:none;background:#EF4444;color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:8px;line-height:1.4}
 .notif-counter.show{display:inline-block}
+/* Call bar */
+.call-bar{display:none;padding:10px 24px;background:rgba(34,197,94,0.08);border-bottom:1px solid rgba(34,197,94,0.15);align-items:center;gap:12px;font-size:12px}
+.call-bar.show{display:flex}
+.call-bar .status-dot{width:8px;height:8px;border-radius:50%;background:#22C55E;animation:pulse 1.5s infinite}
+.call-bar .status-text{color:#22C55E;font-weight:600}
+.call-bar .time{color:#94A3B8;font-size:10px}
+.call-bar .hangup-btn{margin-left:auto;padding:6px 14px;border-radius:8px;background:rgba(239,68,68,0.15);color:#EF4444;border:1px solid rgba(239,68,68,0.25);cursor:pointer;font-size:10px;font-weight:700;transition:all 0.15s}
+.call-bar .hangup-btn:hover{background:rgba(239,68,68,0.25)}
 </style>
 </head>
 <body>
 <div class="app">
-  <!-- Sidebar -->
   <div class="sidebar">
     <div class="header">
-      <h1>
-        <span class="icon">🎧</span>
-        CS Agent Dashboard
-        <span class="notif-counter" id="notifCounter">0</span>
-      </h1>
-      <div class="sub" id="agentInfo">
-        <span id="agentName">Agent</span> · <span id="ticketCount">0</span> tickets
-      </div>
+      <h1><span class="icon">🎧</span>CS Agent Dashboard<span class="notif-counter" id="notifCounter">0</span></h1>
+      <div class="sub" id="agentInfo"><span id="agentName">Agent</span> · <span id="ticketCount">0</span> tickets</div>
     </div>
-    <div class="notif-banner" id="notifBanner">
-      🔔 New ticket arrived!
-      <button class="dismiss" onclick="dismissNotif()">✕</button>
-    </div>
+    <div class="notif-banner" id="notifBanner">🔔 New ticket arrived!<button class="dismiss" onclick="dismissNotif()">✕</button></div>
     <div class="ticket-list" id="ticketList"></div>
   </div>
 
-  <!-- Main -->
   <div class="main">
+    <!-- Call bar -->
+    <div class="call-bar" id="callBar">
+      <span class="status-dot"></span>
+      <span class="status-text" id="callStatusText">In call with User</span>
+      <span class="time" id="callTimer">00:00</span>
+      <button class="hangup-btn" onclick="hangupCall()">☎️ Hang Up</button>
+    </div>
+
     <div id="noTicket" class="no-ticket">
       <div class="icon">🎧</div>
       <h2>Wayfinder CS Dashboard</h2>
-      <p>Select a ticket from the sidebar to start helping a customer. New tickets appear automatically.</p>
-      <div class="steps">
-        <span>🔔 Auto-refresh</span>
-        <span>💬 Live chat</span>
-        <span>✈️ Book for user</span>
-      </div>
+      <p>Select a ticket from the sidebar. New tickets appear automatically.</p>
+      <div class="steps"><span>🔔 Auto-refresh</span><span>💬 Live chat</span><span>☎️ Call users</span><span>✈️ Book flights</span></div>
     </div>
 
-    <div id="ticketPanel" style="display:none;flex:1;display:none;flex-direction:column">
-      <!-- Tabs -->
+    <div id="ticketPanel" style="display:none;flex-direction:column">
       <div class="tabs">
         <div class="tab active" data-tab="chat" onclick="switchTab('chat')">💬 Chat</div>
         <div class="tab" data-tab="booking" onclick="switchTab('booking')">✈️ Book Flight</div>
       </div>
 
-      <!-- Chat Tab -->
       <div id="chatTab" class="flex-col" style="flex:1;display:flex">
         <div class="chat-header">
           <div class="avatar" id="chatAvatar">U</div>
@@ -169,8 +150,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
             <div class="meta" id="chatMeta">Ticket: ---</div>
           </div>
           <div class="actions">
-            <button class="btn-book" onclick="switchTab('booking')">✈️ Book Flight</button>
-            <button class="btn-resolve" onclick="closeTicket()">✅ Resolve</button>
+            <button id="callBtn" class="btn-call" onclick="callUser()">☎️ Call</button>
+            <button class="btn-book" onclick="switchTab('booking')">✈️ Book</button>
+            <button class="btn-resolve" onclick="closeTicket()">✅ Done</button>
           </div>
         </div>
         <div class="messages" id="messages"></div>
@@ -182,53 +164,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         </div>
       </div>
 
-      <!-- Booking Tab -->
       <div id="bookingTab" class="flex-col" style="flex:1;display:none">
         <div class="booking-form">
           <div class="grid">
-            <div class="full">
-              <label>Passenger Full Name</label>
-              <input id="bkName" placeholder="e.g. John Smith">
-            </div>
-            <div>
-              <label>Origin</label>
-              <input id="bkOrigin" placeholder="e.g. LHR" maxlength="3" style="text-transform:uppercase">
-            </div>
-            <div>
-              <label>Destination</label>
-              <input id="bkDest" placeholder="e.g. NRT" maxlength="3" style="text-transform:uppercase">
-            </div>
-            <div>
-              <label>Departure Date</label>
-              <input id="bkDate" type="date">
-            </div>
-            <div>
-              <label>Passengers</label>
-              <select id="bkPassengers">
-                <option value="1">1 Adult</option>
-                <option value="2">2 Adults</option>
-                <option value="3">3 Adults</option>
-                <option value="4">4 Adults</option>
-                <option value="5">5 Adults</option>
-              </select>
-            </div>
-            <div>
-              <label>Cabin Class (Seat)</label>
-              <select id="bkSeat">
-                <option value="economy">Economy</option>
-                <option value="premium_economy">Premium Economy</option>
-                <option value="business">Business</option>
-                <option value="first">First Class</option>
-              </select>
-            </div>
-            <div>
-              <label>Max Budget (£)</label>
-              <input id="bkBudget" type="number" placeholder="e.g. 500" min="0">
-            </div>
-            <div>
-              <label>&nbsp;</label>
-              <button class="submit-btn" id="bkSubmit" onclick="agentBookFlight()">🔍 Search & Book for User</button>
-            </div>
+            <div class="full"><label>Passenger Full Name</label><input id="bkName" placeholder="e.g. John Smith"></div>
+            <div><label>Origin</label><input id="bkOrigin" placeholder="e.g. LHR" maxlength="3" style="text-transform:uppercase"></div>
+            <div><label>Destination</label><input id="bkDest" placeholder="e.g. NRT" maxlength="3" style="text-transform:uppercase"></div>
+            <div><label>Departure Date</label><input id="bkDate" type="date"></div>
+            <div><label>Passengers</label><select id="bkPassengers"><option value="1">1 Adult</option><option value="2">2 Adults</option><option value="3">3 Adults</option><option value="4">4 Adults</option><option value="5">5 Adults</option></select></div>
+            <div><label>Cabin Class</label><select id="bkSeat"><option value="economy">Economy</option><option value="premium_economy">Premium Economy</option><option value="business">Business</option><option value="first">First Class</option></select></div>
+            <div><label>Max Budget (£)</label><input id="bkBudget" type="number" placeholder="e.g. 500" min="0"></div>
+            <div><label>&nbsp;</label><button class="submit-btn" id="bkSubmit" onclick="agentBookFlight()">🔍 Search & Book for User</button></div>
           </div>
           <div class="result" id="bkResult"></div>
         </div>
@@ -236,156 +182,202 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     </div>
   </div>
 </div>
-
-<!-- Toast -->
 <div class="toast" id="toast"></div>
 
 <script>
-// ═══════════════════════════════════════════════════════════════
-// CONFIG
-// ═══════════════════════════════════════════════════════════════
 const API = window.location.origin + '/api';
-
-// ═══════════════════════════════════════════════════════════════
-// STATE
-// ═══════════════════════════════════════════════════════════════
-let tickets = [];
-let activeTicketId = null;
-let lastTicketCount = 0;
-let prevTicketIds = new Set();
+let tickets = [], activeTicketId = null, lastTicketCount = 0, prevTicketIds = new Set();
 let agentName = localStorage.getItem('cs_agent_name') || 'Agent Smith';
 let seenTickets = new Set(JSON.parse(localStorage.getItem('cs_seen_tickets') || '[]'));
-
+let lastMsgCount = 0, callTimerInterval = null, callStartTime = null;
 document.getElementById('agentName').textContent = agentName;
 
-// ═══════════════════════════════════════════════════════════════
-// POLL: Tickets every 3s
-// ═══════════════════════════════════════════════════════════════
 async function fetchTickets() {
   try {
     const res = await fetch(`${API}/cs/tickets`);
     const data = await res.json();
     const newIds = new Set(data.tickets.map(t => t.id));
-
-    // Check for new tickets
     for (const t of data.tickets) {
       if (!seenTickets.has(t.id) && t.status !== 'closed') {
-        if (prevTicketIds.size > 0) {
-          showNotifBanner(`🔔 New ticket from ${t.user_name}`);
-          showToast(`${t.user_name} needs help`, 'info');
-        }
+        if (prevTicketIds.size > 0) { showNotifBanner(`🔔 New ticket from ${t.user_name}`); showToast(`${t.user_name} needs help`, 'info'); }
         seenTickets.add(t.id);
       }
     }
     localStorage.setItem('cs_seen_tickets', JSON.stringify([...seenTickets]));
     prevTicketIds = newIds;
-
     tickets = data.tickets;
     lastTicketCount = data.count;
     renderTickets();
     document.getElementById('ticketCount').textContent = tickets.filter(t => t.status !== 'closed').length;
-
-    // Update active ticket messages if it changed
     if (activeTicketId) {
       const active = tickets.find(t => t.id === activeTicketId);
       if (active) updateChatHeader(active);
       fetchMessages();
     }
-  } catch(e) { console.warn('Fetch tickets failed:', e); }
+  } catch(e) {}
 }
-
 setInterval(fetchTickets, 3000);
 fetchTickets();
 
-// ═══════════════════════════════════════════════════════════════
-// RENDER TICKETS
-// ═══════════════════════════════════════════════════════════════
 function renderTickets() {
   const el = document.getElementById('ticketList');
   const openTickets = tickets.filter(t => t.status !== 'closed');
   const closedTickets = tickets.filter(t => t.status === 'closed');
-
   let html = '';
-
   if (tickets.length === 0) {
-    html = `<div class="empty-state"><div class="icon">🎧</div><p>No tickets yet</p><div class="sub">Tickets appear here when users need CS support</div></div>`;
-    el.innerHTML = html;
+    el.innerHTML = `<div class="empty-state"><div class="icon">🎧</div><p>No tickets yet</p><div class="sub">Tickets appear here when users need CS support</div></div>`;
     return;
   }
-
-  // Open tickets
-  for (const t of openTickets) {
-    html += renderTicket(t);
-  }
-
-  // Closed tickets
+  for (const t of openTickets) html += renderTicket(t);
   if (closedTickets.length > 0) {
     html += `<div style="padding:12px 20px;font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:0.5px">Resolved (${closedTickets.length})</div>`;
-    for (const t of closedTickets) {
-      html += renderTicket(t);
-    }
+    for (const t of closedTickets) html += renderTicket(t);
   }
-
   el.innerHTML = html;
 }
 
 function renderTicket(t) {
   const isActive = t.id === activeTicketId;
-  const badgeClass = t.status === 'open' ? 'badge-open' : t.status === 'assigned' ? 'badge-assigned' : 'badge-closed';
-  const badgeLabel = t.status === 'open' ? 'New' : t.status === 'assigned' ? 'Active' : 'Done';
-  const timeAgo = timeSince(t.created_at);
+  const isCalling = t.call_status === 'in_call';
+  const badgeClass = isCalling ? 'badge-call' : t.status === 'open' ? 'badge-open' : t.status === 'assigned' ? 'badge-assigned' : 'badge-closed';
+  const badgeLabel = isCalling ? '📞 On Call' : t.status === 'open' ? 'New' : t.status === 'assigned' ? 'Active' : 'Done';
   const isNew = !seenTickets.has(t.id) && t.status !== 'closed';
-  return `<div class="ticket ${isActive ? 'active':''}" onclick="selectTicket('${t.id}')">
-    ${isNew ? '<div class="notification-dot"></div>' : ''}
-    <div class="top">
-      <span class="name">${escHtml(t.user_name)}</span>
-      <span class="badge ${badgeClass}">${badgeLabel}</span>
-    </div>
-    <div class="preview">${escHtml(t.last_message || t.issue || 'No messages yet')}</div>
-    <div class="time">${timeAgo} · ${t.message_count || 0} msgs</div>
+  return `<div class="ticket ${isActive?'active':''}" onclick="selectTicket('${t.id}')">
+    ${isNew ? '<div class="notification-dot"></div>':''}
+    <div class="top"><span class="name">${escHtml(t.user_name)}</span><span class="badge ${badgeClass}">${badgeLabel}</span></div>
+    <div class="preview">${escHtml(t.last_message || t.issue || 'No messages yet')}${isCalling ? ' 📞 Call in progress' : ''}</div>
+    <div class="time">${timeSince(t.created_at)} · ${t.message_count||0} msgs</div>
   </div>`;
 }
 
-// ═══════════════════════════════════════════════════════════════
-// SELECT TICKET
-// ═══════════════════════════════════════════════════════════════
 async function selectTicket(id) {
   activeTicketId = id;
   seenTickets.add(id);
   localStorage.setItem('cs_seen_tickets', JSON.stringify([...seenTickets]));
-
   document.getElementById('noTicket').style.display = 'none';
   document.getElementById('ticketPanel').style.display = 'flex';
   document.getElementById('ticketPanel').style.flexDirection = 'column';
-
-  // Auto-assign if open
   const ticket = tickets.find(t => t.id === id);
   if (ticket && ticket.status === 'open') {
-    try {
-      await fetch(`${API}/cs/tickets/${id}/assign?agent_id=${encodeURIComponent(agentName)}`, { method: 'POST' });
-      showToast(`Assigned ticket ${id} to you`, 'success');
-    } catch(e) {}
+    try { await fetch(`${API}/cs/tickets/${id}/assign?agent_id=${encodeURIComponent(agentName)}`, { method: 'POST' }); } catch(e) {}
   }
-
   updateChatHeader(ticket);
   renderTickets();
   fetchMessages();
   switchTab('chat');
+  // Check call status
+  updateCallState(ticket);
 }
 
 function updateChatHeader(ticket) {
   if (!ticket) return;
-  document.getElementById('chatAvatar').textContent = (ticket.user_name || 'U')[0].toUpperCase();
+  document.getElementById('chatAvatar').textContent = (ticket.user_name||'U')[0].toUpperCase();
   document.getElementById('chatUserName').textContent = ticket.user_name || 'Guest';
-  document.getElementById('chatMeta').textContent = `Ticket: ${ticket.id} · ${ticket.status}`;
-  // Pre-fill booking form
+  document.getElementById('chatMeta').textContent = `Ticket: ${ticket.id} · ${ticket.status}${ticket.call_status === 'in_call' ? ' · 📞 On call' : ''}`;
   document.getElementById('bkName').value = ticket.user_name || '';
+  updateCallBtn(ticket);
+}
+
+function updateCallBtn(ticket) {
+  const btn = document.getElementById('callBtn');
+  if (!ticket) return;
+  const cs = ticket.call_status;
+  if (cs === 'in_call') {
+    btn.textContent = '📞 On Call';
+    btn.className = 'btn-hangup';
+    btn.onclick = hangupCall;
+  } else if (cs === 'calling') {
+    btn.textContent = '🔔 Ringing...';
+    btn.className = 'btn-ringing';
+    btn.onclick = hangupCall;
+  } else {
+    btn.textContent = '☎️ Call';
+    btn.className = 'btn-call';
+    btn.onclick = callUser;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CALL SYSTEM
+// ═══════════════════════════════════════════════════════════════
+
+async function callUser() {
+  if (!activeTicketId) return;
+  try {
+    const res = await fetch(`${API}/cs/tickets/${activeTicketId}/call?agent_id=${encodeURIComponent(agentName)}`, { method: 'POST' });
+    const data = await res.json();
+    showToast(`📞 Calling user...`, 'success');
+    updateCallBtn({ call_status: 'calling' });
+    // Poll for user to accept
+    waitForAnswer();
+  } catch(e) { showToast('Call failed', 'error'); }
+}
+
+async function waitForAnswer() {
+  if (!activeTicketId) return;
+  try {
+    const res = await fetch(`${API}/cs/tickets/${activeTicketId}/call/status`);
+    const data = await res.json();
+    if (data.call_status === 'in_call') {
+      showCallConnected();
+      return;
+    } else if (data.call_status === 'ended') {
+      showToast('Call was declined', 'info');
+      resetCallUI();
+      return;
+    }
+    // Keep polling
+    setTimeout(waitForAnswer, 2000);
+  } catch(e) { setTimeout(waitForAnswer, 2000); }
+}
+
+function showCallConnected() {
+  showToast('📞 Call connected!', 'success');
+  document.getElementById('callBar').classList.add('show');
+  document.getElementById('callStatusText').textContent = `📞 In call with ${document.getElementById('chatUserName').textContent}`;
+  callStartTime = Date.now();
+  callTimerInterval = setInterval(updateCallTimer, 1000);
+  updateCallBtn({ call_status: 'in_call' });
+  fetchMessages(); // Get the "connected" system message
+}
+
+function updateCallTimer() {
+  if (!callStartTime) return;
+  const secs = Math.floor((Date.now() - callStartTime) / 1000);
+  const m = String(Math.floor(secs / 60)).padStart(2, '0');
+  const s = String(secs % 60).padStart(2, '0');
+  document.getElementById('callTimer').textContent = `${m}:${s}`;
+}
+
+async function hangupCall() {
+  if (!activeTicketId) return;
+  try {
+    await fetch(`${API}/cs/tickets/${activeTicketId}/call/end`, { method: 'POST' });
+  } catch(e) {}
+  showToast('📞 Call ended', 'info');
+  resetCallUI();
+}
+
+function resetCallUI() {
+  document.getElementById('callBar').classList.remove('show');
+  if (callTimerInterval) clearInterval(callTimerInterval);
+  callStartTime = null;
+  updateCallBtn({ call_status: 'none' });
+  renderTickets();
+}
+
+async function updateCallState(ticket) {
+  if (!ticket) return;
+  if (ticket.call_status === 'in_call') {
+    showCallConnected();
+  } else if (ticket.call_status === 'ended' || ticket.call_status === 'none') {
+    resetCallUI();
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
 // MESSAGES
 // ═══════════════════════════════════════════════════════════════
-let lastMsgCount = 0;
 
 async function fetchMessages() {
   if (!activeTicketId) return;
@@ -393,10 +385,15 @@ async function fetchMessages() {
     const res = await fetch(`${API}/cs/tickets/${activeTicketId}/messages`);
     const data = await res.json();
     const msgs = data.messages || [];
-
     if (msgs.length !== lastMsgCount) {
       renderMessages(msgs);
       lastMsgCount = msgs.length;
+      // Check call status from system messages
+      for (const m of msgs) {
+        if (m.sender === 'system' && m.message.includes('Call connected')) {
+          if (!document.getElementById('callBar').classList.contains('show')) showCallConnected();
+        }
+      }
     }
   } catch(e) {}
 }
@@ -404,43 +401,37 @@ async function fetchMessages() {
 function renderMessages(msgs) {
   const el = document.getElementById('messages');
   if (!msgs || msgs.length === 0) {
-    el.innerHTML = `<div class="empty-state" style="height:100%"><div class="icon">💬</div><p>No messages yet</p><div class="sub">Send a message to start the conversation</div></div>`;
+    el.innerHTML = `<div class="empty-state" style="height:100%"><div class="icon">💬</div><p>No messages yet</p><div class="sub">Send a message or call the user</div></div>`;
     return;
   }
   el.innerHTML = msgs.map(m => {
     const senderClass = m.sender === 'agent' ? 'agent' : m.sender === 'system' ? 'system' : 'user';
-    return `<div class="msg ${senderClass}">
-      ${escHtml(m.message)}
-      <div class="meta">${m.sender === 'agent' ? agentName : m.sender === 'system' ? 'System' : 'User'} · ${timeSince(m.created_at)}</div>
-    </div>`;
+    return `<div class="msg ${senderClass}">${escHtml(m.message)}<div class="meta">${m.sender === 'agent' ? agentName : m.sender === 'system' ? 'System' : 'User'} · ${timeSince(m.created_at)}</div></div>`;
   }).join('');
   el.scrollTop = el.scrollHeight;
 }
 
-// Send message
 async function sendMsg() {
   const input = document.getElementById('msgInput');
   const text = input.value.trim();
   if (!text || !activeTicketId) return;
-
   input.value = '';
   document.getElementById('sendBtn').disabled = true;
-
   try {
     await fetch(`${API}/cs/tickets/${activeTicketId}/message?sender=agent&message=${encodeURIComponent(text)}`, { method: 'POST' });
-    lastMsgCount = 0; // Force refresh
+    lastMsgCount = 0;
     await fetchMessages();
-  } catch(e) {
-    showToast('Failed to send message', 'error');
-  }
+  } catch(e) { showToast('Failed to send', 'error'); }
   document.getElementById('sendBtn').disabled = false;
 }
 
 // ═══════════════════════════════════════════════════════════════
-// CLOSE TICKET
+// CLOSE & RESOLVE
 // ═══════════════════════════════════════════════════════════════
+
 async function closeTicket() {
   if (!activeTicketId) return;
+  if (document.getElementById('callBar').classList.contains('show')) await hangupCall();
   try {
     await fetch(`${API}/cs/tickets/${activeTicketId}/close`, { method: 'POST' });
     showToast('Ticket resolved ✅', 'success');
@@ -448,195 +439,90 @@ async function closeTicket() {
     document.getElementById('noTicket').style.display = 'flex';
     document.getElementById('ticketPanel').style.display = 'none';
     fetchTickets();
-  } catch(e) {
-    showToast('Failed to close ticket', 'error');
-  }
+  } catch(e) { showToast('Failed to close', 'error'); }
 }
 
 // ═══════════════════════════════════════════════════════════════
 // AGENT BOOKING
 // ═══════════════════════════════════════════════════════════════
+
 async function agentBookFlight() {
   const name = document.getElementById('bkName').value.trim();
   const origin = document.getElementById('bkOrigin').value.trim().toUpperCase();
   const dest = document.getElementById('bkDest').value.trim().toUpperCase();
   const date = document.getElementById('bkDate').value;
   const passengers = parseInt(document.getElementById('bkPassengers').value);
-  const seat = document.getElementById('bkSeat').value;
   const budget = document.getElementById('bkBudget').value;
-
-  // Validate
-  if (!name) return showBookingResult('Please enter passenger name', 'error');
-  if (!origin || origin.length !== 3) return showBookingResult('Enter a valid 3-letter origin IATA code (e.g. LHR)', 'error');
-  if (!dest || dest.length !== 3) return showBookingResult('Enter a valid 3-letter destination IATA code (e.g. NRT)', 'error');
-  if (!date) return showBookingResult('Please select a departure date', 'error');
+  if (!name) return showBookingResult('Enter passenger name', 'error');
+  if (!origin || origin.length !== 3) return showBookingResult('Enter 3-letter origin IATA (e.g. LHR)', 'error');
+  if (!dest || dest.length !== 3) return showBookingResult('Enter 3-letter destination IATA (e.g. NRT)', 'error');
+  if (!date) return showBookingResult('Select a departure date', 'error');
 
   const btn = document.getElementById('bkSubmit');
-  btn.disabled = true;
-  btn.textContent = '🔍 Searching...';
+  btn.disabled = true; btn.textContent = '🔍 Searching...';
   showBookingResult('Searching flights...', 'loading');
-
   try {
-    // Step 1: Search flights
-    let searchUrl = `${API}/flights/search?origin=${origin}&destination=${dest}&departure_date=${date}&passengers=${passengers}`;
-
-    let res = await fetch(searchUrl, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ origin, destination, departure_date: date, passengers })
-    });
-
-    // Try the budget endpoint if available
-    if (budget) {
-      res = await fetch(`${API}/flights/budget?origin=${origin}&destination=${dest}&departure_date=${date}&max_price=${budget}&passengers=${passengers}`);
-    }
-
+    let searchUrl = `${API}/flights/search`;
+    let res = await fetch(searchUrl, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({origin, destination, departure_date: date, passengers}) });
+    if (budget) res = await fetch(`${API}/flights/budget?origin=${origin}&destination=${dest}&departure_date=${date}&max_price=${budget}&passengers=${passengers}`);
     const data = await res.json();
-
     let offers = data.offers || data;
     if (!Array.isArray(offers)) offers = [];
-
     if (offers.length === 0) {
       showBookingResult('No flights found. Try different dates or routes.', 'error');
-      btn.disabled = false;
-      btn.textContent = '🔍 Search & Book for User';
-      return;
+      btn.disabled = false; btn.textContent = '🔍 Search & Book for User'; return;
     }
-
-    // Pick cheapest
-    const cheapest = offers.reduce((a, b) => {
-      const pa = parseFloat(a.price || a.total_amount || 0);
-      const pb = parseFloat(b.price || b.total_amount || 0);
-      return pa < pb ? a : b;
-    }, offers[0]);
-
-    showBookingResult(
-      `Found ${offers.length} flights! Cheapest: ${cheapest.airline || 'Unknown'} ${cheapest.flight_number || ''} — £${cheapest.price || cheapest.total_amount || 'N/A'} · ${cheapest.origin || origin} → ${cheapest.destination || dest} on ${cheapest.departure_date || date}`,
-      'loading'
-    );
-
-    // Step 2: Create a booking session and book
+    const cheapest = offers.reduce((a,b) => (parseFloat(a.price||a.total_amount||0) < parseFloat(b.price||b.total_amount||0)) ? a : b, offers[0]);
+    showBookingResult(`Found ${offers.length} flights! Cheapest: ${cheapest.airline||'Airline'} £${cheapest.price||cheapest.total_amount||'N/A'} · ${origin} → ${dest} on ${date}`, 'loading');
     btn.textContent = '✈️ Booking...';
-
-    // Create wizard session
     const sessionRes = await fetch(`${API}/wizard/session`, { method: 'POST' });
     const sessionData = await sessionRes.json();
     const sessionId = sessionData.id || sessionData.session_id;
-
-    // Create booking directly
-    const bookRes = await fetch(`${API}/booking/create`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        session_id: sessionId,
-        origin, destination,
-        departure_date: date,
-        passenger_name: name,
-        total_amount: cheapest.price || cheapest.total_amount || '0',
-        booking_reference: `CS-${Date.now().toString(36).toUpperCase()}`,
-      })
-    });
-
+    const bookRes = await fetch(`${API}/booking/create`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({session_id: sessionId, origin, destination, departure_date: date, passenger_name: name, total_amount: cheapest.price||cheapest.total_amount||'0', booking_reference: `CS-${Date.now().toString(36).toUpperCase()}`}) });
     const booking = await bookRes.json();
-
-    // Send system message to ticket
-    const bookSummary = `✈️ **Agent booked flight for ${name}**: ${origin} → ${dest} on ${date}, ${cheapest.airline || ''} ${cheapest.price || ''}`;
-    await fetch(`${API}/cs/tickets/${activeTicketId}/message?sender=system&message=${encodeURIComponent(bookSummary)}`, { method: 'POST' });
-
-    showBookingResult(
-      `✅ BOOKING CONFIRMED! ${origin} → ${dest} on ${date}. Passenger: ${name}. Ref: ${booking.booking_reference || booking.id || 'N/A'}.`,
-      'success'
-    );
+    const bookingRef = booking.booking_reference || booking.id || `CS-${Date.now().toString(36).toUpperCase()}`;
+    const totalPrice = cheapest.price || cheapest.total_amount || '0';
+    // Send structured booking confirmation message
+    const bookingData = JSON.stringify({type:'booking_confirmed',origin,destination,date,passenger_name:name,total_amount:totalPrice,booking_reference:bookingRef,airline:cheapest.airline||'Airline',flight_number:cheapest.flight_number||'',seat:document.getElementById('bkSeat').value,passengers});
+    await fetch(`${API}/cs/tickets/${activeTicketId}/message?sender=system&message=${encodeURIComponent('BOOKING:'+bookingData)}`, { method: 'POST' });
+    const summary = `✈️ **Agent booked for ${name}**: ${origin} → ${dest} on ${date}, ${cheapest.airline||''} £${totalPrice}`;
+    await fetch(`${API}/cs/tickets/${activeTicketId}/message?sender=system&message=${encodeURIComponent(summary)}`, { method: 'POST' });
+    showBookingResult(`✅ BOOKED! ${origin} → ${dest} on ${date}. ${name}. Ref: ${bookingRef}`, 'success');
     btn.textContent = '✅ Booked! Book Another';
-    lastMsgCount = 0;
-    fetchMessages();
-
-  } catch(e) {
-    showBookingResult(`Booking failed: ${e.message}`, 'error');
-    btn.disabled = false;
-    btn.textContent = '🔍 Search & Book for User';
-  }
+    lastMsgCount = 0; fetchMessages();
+  } catch(e) { showBookingResult(`Failed: ${e.message}`, 'error'); btn.disabled = false; btn.textContent = '🔍 Search & Book for User'; }
 }
 
 function showBookingResult(msg, type) {
   const el = document.getElementById('bkResult');
-  el.textContent = msg;
-  el.className = 'result ' + type;
-  el.style.display = 'block';
+  el.textContent = msg; el.className = 'result ' + type; el.style.display = 'block';
 }
 
-// ═══════════════════════════════════════════════════════════════
-// TAB SWITCHING
-// ═══════════════════════════════════════════════════════════════
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelector(`.tab[data-tab="${name}"]`).classList.add('active');
-
   document.getElementById('chatTab').style.display = name === 'chat' ? 'flex' : 'none';
   document.getElementById('bookingTab').style.display = name === 'booking' ? 'flex' : 'none';
-
-  if (name === 'messages') {
-    lastMsgCount = 0;
-    fetchMessages();
-  }
+  if (name === 'messages') { lastMsgCount = 0; fetchMessages(); }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// NOTIFICATIONS
-// ═══════════════════════════════════════════════════════════════
 function showNotifBanner(msg) {
   const banner = document.getElementById('notifBanner');
   banner.innerHTML = `🔔 ${msg} <button class="dismiss" onclick="dismissNotif()">✕</button>`;
   banner.classList.add('show');
-  // Update counter
   const openCount = tickets.filter(t => t.status !== 'closed').length;
   const counter = document.getElementById('notifCounter');
-  if (openCount > 0) {
-    counter.textContent = openCount;
-    counter.classList.add('show');
-  }
+  if (openCount > 0) { counter.textContent = openCount; counter.classList.add('show'); }
 }
-
-function dismissNotif() {
-  document.getElementById('notifBanner').classList.remove('show');
-}
-
-// ═══════════════════════════════════════════════════════════════
-// TOAST
-// ═══════════════════════════════════════════════════════════════
-function showToast(msg, type = 'info') {
+function dismissNotif() { document.getElementById('notifBanner').classList.remove('show'); }
+function showToast(msg, type) {
   const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = 'toast ' + type;
-  el.classList.add('show');
+  el.textContent = msg; el.className = 'toast ' + type; el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 4000);
 }
-
-// ═══════════════════════════════════════════════════════════════
-// UTILITIES
-// ═══════════════════════════════════════════════════════════════
-function escHtml(str) {
-  if (!str) return '';
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-function timeSince(ts) {
-  if (!ts) return '';
-  const secs = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
-  if (secs < 60) return 'just now';
-  if (secs < 3600) return Math.floor(secs/60) + 'm ago';
-  if (secs < 86400) return Math.floor(secs/3600) + 'h ago';
-  return Math.floor(secs/86400) + 'd ago';
-}
-
-// Unfocus input sends
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    document.getElementById('msgInput').blur();
-  }
-});
+function escHtml(str) { if (!str) return ''; const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+function timeSince(ts) { if (!ts) return ''; const s = Math.floor((Date.now()-new Date(ts).getTime())/1000); if(s<60)return 'just now'; if(s<3600)return Math.floor(s/60)+'m ago'; if(s<86400)return Math.floor(s/3600)+'h ago'; return Math.floor(s/86400)+'d ago'; }
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.getElementById('msgInput').blur(); });
 </script>
 </body>
 </html>

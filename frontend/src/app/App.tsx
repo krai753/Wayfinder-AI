@@ -27,6 +27,7 @@ import CSDashboard from "../components/screens/CSDashboard";
 
 import type { FlightOffer, BookingResult } from "../types";
 import { api } from "../services/api";
+import CSCallHandler from "../components/screens/CSCallScreen";
 
 // ── SCREEN TYPES ────────────────────────────────────────────────
 
@@ -388,6 +389,8 @@ export default function App() {
                   params.destination || "",
                   params.date || ""
                 );
+              } else if (screenName === "session_update" && data?.session_id) {
+                updateState({ sessionId: data.session_id });
               } else if (screenName === "home") {
                 goHome();
               }
@@ -514,6 +517,7 @@ export default function App() {
           </motion.div>
         </AnimatePresence>
         <BottomNav current={screen} navigate={navigate} />
+        <CSCallHandler sessionId={state.sessionId} />
       </div>
     </div>
   );

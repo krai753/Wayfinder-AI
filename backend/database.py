@@ -103,6 +103,16 @@ def init_db():
     except sqlite3.OperationalError:
         pass  # Column already exists
 
+    # Add call columns to cs_tickets
+    try:
+        cursor.execute("ALTER TABLE cs_tickets ADD COLUMN call_status TEXT DEFAULT 'none'")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute("ALTER TABLE cs_tickets ADD COLUMN call_agent TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
+
     conn.close()
 
 

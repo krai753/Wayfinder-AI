@@ -245,6 +245,7 @@ export default function VoiceScreen({
           if (cmdResult.parameters?.session_id) {
             setSessionId(cmdResult.parameters.session_id);
             sessionIdRef.current = cmdResult.parameters.session_id;
+            onNavigate("session_update", { session_id: cmdResult.parameters.session_id });
           }
 
           // Speak the response
