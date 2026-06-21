@@ -11,6 +11,8 @@ from duffel_client import duffel
 from database import get_session, save_booking, get_bookings, save_offer
 from datetime import datetime
 
+logger = logging.getLogger("wayfinder.booking")
+
 router = APIRouter(prefix="/api", tags=["booking"])
 
 
