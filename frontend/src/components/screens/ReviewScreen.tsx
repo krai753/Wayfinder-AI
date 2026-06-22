@@ -157,7 +157,8 @@ export function ReviewScreen({ navigate }: ReviewScreenProps) {
   }
 
   // ── LONG-PRESS HOLD CONFIRM ──────────────────────────────
-  // Prevents accidental bookings: user must hold ~2s to confirm
+  // Prevents accidental bookings: user must hold ~1.5s to confirm
+  // Simulates hardware volume-button gesture for payment authorization
   function handleHoldStart() {
     if (confirming || booking) return;
     holdActiveRef.current = true;
@@ -185,11 +186,33 @@ export function ReviewScreen({ navigate }: ReviewScreenProps) {
     if (holdActiveRef.current) {
       holdActiveRef.current = false;
       setHoldProgress(0);
-      speak({ text: "Hold the button down for 2 seconds to confirm." });
+      speak({ text: "Hold the button down to authorize payment." });
     } else {
       setHoldProgress(0);
     }
   }
+
+  // Keyboard shortcut: press "+" or "=" to simulate volume-button hold for demo
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        handleHoldStart();
+      }
+    }
+    function onKeyUp(e: KeyboardEvent) {
+      if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        handleHoldEnd();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, [confirming, booking]);
 
   if (!selectedOffer || !origin || !destination || !departureDate) {
     return null;
@@ -469,11 +492,11 @@ export function ReviewScreen({ navigate }: ReviewScreenProps) {
               ) : (
                 <span className="text-lg flex items-center gap-2">
                   <Fingerprint size={24} aria-hidden="true" />
-                  Hold to confirm
+                  Hold to authorize payment
                 </span>
               )}
               <span className="text-xs font-normal text-white/70">
-                {holdProgress > 0 ? "Keep holding…" : "Press & hold 1.5s to book"}
+                {holdProgress > 0 ? "Keep holding…" : `${formatPrice(offer.price, offer.currency)} · Hold 1.5s to pay`}
               </span>
             </motion.button>
           ) : (

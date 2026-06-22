@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { CheckCircle, Plane, Home, DollarSign, Copy, Check } from "lucide-react";
+import { CheckCircle, Plane, Home, DollarSign, Copy, Check, ShieldCheck } from "lucide-react";
 import { api } from "../../services/api";
 
 function GlassCard({ children, className = "", onClick }: { children: React.ReactNode; className?: string; onClick?: () => void }) {
@@ -134,7 +134,15 @@ export default function SuccessScreen({
         <GlassCard className="p-6">
           <div className="space-y-4">
             {/* Reference */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between pb-3 border-b border-white/8">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={16} color="#22C55E" />
+                <span className="text-xs font-semibold text-[#22C55E]">Payment authorized via secure gesture</span>
+              </div>
+            </div>
+
+            {/* Reference */}
+            <div className="flex items-center justify-between pt-1">
               <span className="text-sm text-[#94A3B8]">Reference</span>
               <div className="flex items-center gap-2">
                 <Badge color="green">{booking.booking_reference || "N/A"}</Badge>
