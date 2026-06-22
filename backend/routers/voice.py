@@ -136,8 +136,35 @@ async def voice_command(req: VoiceCommandRequest):
                 if result.get("intent") in ("unknown", "help"):
                     result["intent"] = "confirm_booking"
 
-    # ── CONFIDENCE GATE — track across 3 consecutive cycles ────
+# ── CONFIDENCE GATE — escape hatch ──────────────────────
     confidence = float(params.get("confidence", 1.0))
+    
+    # If confidence is below 85% on a single utterance, escalate immediately
+    # This is the "API Parsing Confidence" trigger described in the design spec
+    if confidence < 0.85:
+        sid = req.session_id or ""
+        logger.warning(f"Low confidence {confidence:.2f} (< 0.85) — escalating to CS")
+        ticket_id = f"TKT{uuid.uuid4().hex[:8].upper()}"
+        user_name = "Guest"
+        session_data = get_wizard_session(sid) if sid else None
+        if session_data and session_data.get("passenger_name"):
+            user_name = session_data["passenger_name"]
+        create_cs_ticket(ticket_id, session_id=sid, user_name=user_name,
+                         issue=f"AI parsing confidence {confidence:.2f} below 0.85 threshold")
+        return VoiceCommandResponse(
+            intent="cs_escalation",
+            parameters={"confidence": confidence, "reason": "low_confidence",
+                         "original_text": req.text, "ticket_id": ticket_id,
+                         "last_agent_message_id": 0},
+            response_text=(
+                f"I understood you with only {int(confidence * 100)}% confidence, "
+                "which is below my safety threshold. "
+                f"Your ticket ID is {ticket_id}. "
+                "Let me connect you to a customer service agent who can help."
+            ),
+        )
+    
+    # Also run the 3-cycle retry tracker for unclear speech/ambient noise
     in_collection_mode = False
     low_conf_count = 0
     if req.session_id:
@@ -147,7 +174,7 @@ async def voice_command(req: VoiceCommandRequest):
                 in_collection_mode = True
             low_conf_count = int(session.get("low_confidence_count", 0))
 
-    if confidence < 0.75:
+    if confidence < 0.8:
         low_conf_count += 1
         if req.session_id:
             update_db_session(req.session_id, low_confidence_count=low_conf_count)
@@ -171,7 +198,7 @@ async def voice_command(req: VoiceCommandRequest):
                          "original_text": req.text, "ticket_id": ticket_id,
                          "last_agent_message_id": 0},
             response_text=(
-                "I'm having trouble understanding you clearly. "
+                "I'm still having trouble understanding you clearly. "
                 f"Your ticket ID is {ticket_id}. "
                 "Let me connect you to a customer service agent. "
                 "You can check for agent messages by saying 'check my messages'."
@@ -217,6 +244,36 @@ async def voice_command(req: VoiceCommandRequest):
                 parameters={"missing_fields": missing, "next_field": next_field},
                 response_text=question,
             )
+
+    # 3b. EMERGENCY OVERRIDE — detect crisis keywords and escalate immediately
+    emergency_keywords = [
+        "emergency", "missed my connection", "missed my flight", "missed connection",
+        "i'm stranded", "i am stranded", "stranded", "urgent", "help me",
+        "i'm stuck", "i am stuck", "missed the flight", "missed my plane",
+    ]
+    user_text_lower = req.text.lower().strip()
+    is_emergency = any(kw in user_text_lower for kw in emergency_keywords)
+    if is_emergency:
+        sid = req.session_id or ""
+        ticket_id = f"TKT{uuid.uuid4().hex[:8].upper()}"
+        user_name = "Guest"
+        session_data = get_wizard_session(sid) if sid else None
+        if session_data and session_data.get("passenger_name"):
+            user_name = session_data["passenger_name"]
+        create_cs_ticket(ticket_id, session_id=sid, user_name=user_name,
+                         issue=f"EMERGENCY OVERRIDE: user said '{req.text[:100]}'")
+        logger.warning(f"EMERGENCY OVERRIDE triggered: {req.text[:100]!r} → ticket {ticket_id}")
+        return VoiceCommandResponse(
+            intent="cs_escalation",
+            parameters={"reason": "emergency", "ticket_id": ticket_id,
+                         "session_id": sid},
+            response_text=(
+                "I understand this is urgent. I'm connecting you to a human "
+                "customer service agent right now who can help with your situation. "
+                f"Your emergency ticket ID is {ticket_id}. "
+                "An agent will be with you shortly."
+            ),
+        )
 
     # 4. Route to the appropriate handler
     try:

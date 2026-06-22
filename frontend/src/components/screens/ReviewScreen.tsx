@@ -11,7 +11,7 @@
  * - Massive focus rings for keyboard users
  * - Respects prefers-reduced-motion
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { motion } from "motion/react";
 import {
   ArrowLeft,
@@ -23,6 +23,7 @@ import {
   Heart,
   ShieldCheck,
   Calendar,
+  Fingerprint,
 } from "lucide-react";
 import { useWizard } from "../../hooks/useWizard";
 import { useUser } from "../../hooks/useUser";
@@ -61,6 +62,9 @@ export function ReviewScreen({ navigate }: ReviewScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [listeningConfirm, setListeningConfirm] = useState(false);
+  const [holdProgress, setHoldProgress] = useState(0);
+  const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const holdActiveRef = useRef(false);
 
   const speech = useSpeech({
     onResult: (text, isFinal) => {
@@ -149,6 +153,41 @@ export function ReviewScreen({ navigate }: ReviewScreenProps) {
     } else {
       setListeningConfirm(true);
       speech.startListening();
+    }
+  }
+
+  // ── LONG-PRESS HOLD CONFIRM ──────────────────────────────
+  // Prevents accidental bookings: user must hold ~2s to confirm
+  function handleHoldStart() {
+    if (confirming || booking) return;
+    holdActiveRef.current = true;
+    setHoldProgress(0);
+    let elapsed = 0;
+    holdTimerRef.current = setInterval(() => {
+      elapsed += 50;
+      const pct = Math.min(elapsed / 1500, 1); // 1.5s hold
+      setHoldProgress(pct);
+      if (pct >= 1) {
+        clearInterval(holdTimerRef.current!);
+        holdTimerRef.current = null;
+        holdActiveRef.current = false;
+        setHoldProgress(0);
+        handleConfirm();
+      }
+    }, 50);
+  }
+
+  function handleHoldEnd() {
+    if (holdTimerRef.current) {
+      clearInterval(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    if (holdActiveRef.current) {
+      holdActiveRef.current = false;
+      setHoldProgress(0);
+      speak({ text: "Hold the button down for 2 seconds to confirm." });
+    } else {
+      setHoldProgress(0);
     }
   }
 
@@ -391,31 +430,61 @@ export function ReviewScreen({ navigate }: ReviewScreenProps) {
         </p>
 
         <div className="space-y-3 pt-2">
-          <motion.button
-            type="button"
-            onClick={handleConfirm}
-            disabled={loading || confirming || !!booking}
-            whileTap={!loading && !confirming && !booking ? { scale: 0.98 } : undefined}
-            transition={{ type: "spring", stiffness: 500, damping: 30 }}
-            className="w-full min-h-[80px] rounded-3xl flex items-center justify-center gap-3 font-extrabold text-white focus:outline-none focus:ring-4 focus:ring-emerald-300/70 focus:ring-offset-2 focus:ring-offset-[#0B1020] active:scale-[0.98] transition-all disabled:opacity-50"
-            style={{
-              background: tokens.gradient.success,
-              boxShadow: tokens.elevation.glowSuccess,
-              fontSize: type.h3.size,
-              fontWeight: 800,
-              letterSpacing: "-0.02em",
-            }}
-          >
-            {loading ? (
-              <span
-                className="inline-block w-7 h-7 border-[3px] border-white/30 border-t-white rounded-full animate-spin"
-                aria-hidden="true"
-              />
-            ) : (
-              <Check size={28} strokeWidth={3} aria-hidden="true" />
-            )}
-            <span>{loading ? "Booking…" : "Confirm and pay"}</span>
-          </motion.button>
+          {!loading ? (
+            <motion.button
+              type="button"
+              onMouseDown={handleHoldStart}
+              onMouseUp={handleHoldEnd}
+              onMouseLeave={handleHoldEnd}
+              onTouchStart={handleHoldStart}
+              onTouchEnd={handleHoldEnd}
+              onTouchCancel={handleHoldEnd}
+              disabled={confirming || !!booking}
+              whileTap={!confirming && !booking ? { scale: 0.98 } : undefined}
+              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+              className="w-full min-h-[80px] rounded-3xl flex flex-col items-center justify-center gap-1 font-extrabold text-white focus:outline-none focus:ring-4 focus:ring-emerald-300/70 focus:ring-offset-2 focus:ring-offset-[#0B1020] transition-all disabled:opacity-50 select-none"
+              style={{
+                background: holdProgress > 0
+                  ? `linear-gradient(135deg, #22C55E ${holdProgress * 100}%, #166534 ${holdProgress * 100}%)`
+                  : tokens.gradient.success,
+                boxShadow: tokens.elevation.glowSuccess,
+                fontSize: "1.25rem",
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              {/* Hold progress ring */}
+              <svg className="absolute" width="80" height="80" viewBox="0 0 80 80" style={{ opacity: holdProgress > 0 ? 1 : 0 }}>
+                <circle cx="40" cy="40" r="36" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="4" />
+                <circle cx="40" cy="40" r="36" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="4"
+                  strokeDasharray={`${2 * Math.PI * 36}`}
+                  strokeDashoffset={`${2 * Math.PI * 36 * (1 - holdProgress)}`}
+                  strokeLinecap="round"
+                  transform="rotate(-90, 40, 40)"
+                  style={{ transition: "stroke-dashoffset 0.05s linear" }}
+                />
+              </svg>
+              {holdProgress > 0 ? (
+                <span className="text-lg">{Math.round(holdProgress * 100)}%</span>
+              ) : (
+                <span className="text-lg flex items-center gap-2">
+                  <Fingerprint size={24} aria-hidden="true" />
+                  Hold to confirm
+                </span>
+              )}
+              <span className="text-xs font-normal text-white/70">
+                {holdProgress > 0 ? "Keep holding…" : "Press & hold 1.5s to book"}
+              </span>
+            </motion.button>
+          ) : (
+            <div
+              className="w-full min-h-[80px] rounded-3xl flex items-center justify-center gap-3 font-extrabold text-white"
+              style={{ background: tokens.gradient.success, opacity: 0.6 }}
+            >
+              <span className="inline-block w-7 h-7 border-[3px] border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
+              <span>Booking…</span>
+            </div>
+          )}
 
           <button
             type="button"
