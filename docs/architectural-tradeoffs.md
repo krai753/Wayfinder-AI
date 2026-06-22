@@ -142,7 +142,36 @@ For production:
 
 ---
 
-## 7. Summary of Tradeoffs
+## 7. Payment Authorization: Hold Gesture vs. Tap-to-Pay
+
+### Decision: Long-press hold gesture (1.5s) as tactile payment authorization
+
+| Approach | Pros | Cons | Verdict |
+|----------|------|------|---------|
+| **Single-tap "Confirm & Pay"** | Fast, familiar | Accidental taps from voice-trigger, palm contact on mobile | ❌ Risk of unintended bookings |
+| **Hardware volume-button hold** | Tactile, blind-accessible, matches Apple Pay UX | Not possible in mobile web browsers (no JS API for volume buttons) | ❌ Native-only |
+| **On-screen hold gesture + keyboard shortcut** | Works on all devices, prevents accidents, keyboard `+` key simulates volume button for demo | Slightly slower (1.5s), requires visual button | ✅ **Best web compromise** |
+
+### Why On-Screen Hold
+
+A blind user navigating by touch on a phone screen can:
+1. Find the large confirm button by touch/gesture
+2. Press and hold — feel a haptic-like progress ring filling up
+3. Optional: say "confirm" by voice as alternative
+
+On desktop (for demos): press and hold the **`+` key** to simulate the volume-button hold.
+
+### Production Path
+
+In a native mobile app (iOS/Android), this gesture maps directly to:
+- **iOS:** Double-click side button (Apple Pay authorization)
+- **Android:** Long-press fingerprint sensor or volume rocker
+
+The web prototype proves the *interaction pattern*; native platforms provide the *hardware binding*.
+
+---
+
+## 8. Summary of Tradeoffs
 
 | Decision | Chosen Approach | Alternative Rejected | Primary Reason |
 |----------|----------------|---------------------|----------------|
@@ -152,6 +181,7 @@ For production:
 | Audio transport | HTTP polling | WebSockets | Mobile reliability |
 | TTS | OpenAI TTS | ElevenLabs | Cost vs. quality ratio |
 | Auth | Session-based (none) | Biometric | Prototype scope |
+| Payment | Hold gesture (1.5s on-screen) | Hardware volume button | Web compatibility |
 | Confidence | 85% single-utterance | 3-retry cumulative | User safety priority |
 
 **Core philosophy:** Build for safety first (confidence gate / human handoff), optimize for speed second (5-minute booking), and defer perfect quality for post-hackathon polish.
